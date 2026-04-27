@@ -10,6 +10,7 @@ services:
       context: .
       target: app_dev
     container_name: matre_php
+    restart: unless-stopped
     volumes:
       - .:/app
       - /var/run/docker.sock:/var/run/docker.sock
@@ -37,6 +38,7 @@ services:
   nginx:
     image: nginx:1.25-alpine
     container_name: matre_nginx
+    restart: unless-stopped
     # Direct HTTP access (no Traefik needed for local dev)
     ports:
       - "8089:80"
@@ -54,6 +56,7 @@ services:
   db:
     image: mariadb:11
     container_name: matre_db
+    restart: unless-stopped
     ports:
       - "33067:3306"
     environment:
@@ -177,6 +180,7 @@ services:
   selenium-hub:
     image: selenium/hub:4.40.0-20260120
     container_name: matre_selenium_hub
+    restart: unless-stopped
     ports:
       - "4442:4442"
       - "4443:4443"
@@ -191,6 +195,7 @@ services:
   # noVNC live preview available at https://{APP_DOMAIN}:7900
   chrome-node:
     image: selenium/node-chromium:4.40.0-20260120
+    restart: unless-stopped
     shm_size: 2gb
     ports:
       - "7900"  # noVNC web viewer (dynamic host port for replica support)
@@ -248,6 +253,7 @@ services:
   allure:
     image: frankescobar/allure-docker-service:latest
     container_name: matre_allure
+    restart: unless-stopped
     ports:
       - "5050:5050"
       - "5252:5252"
@@ -268,6 +274,7 @@ services:
       context: ./docker/magento
       dockerfile: Dockerfile
     container_name: matre_magento
+    restart: unless-stopped
     volumes:
       - matre_magento_code:/var/www/html
       # Dev mode: mount DEV_MODULE_PATH directly; Prod: mount cloned module
@@ -301,6 +308,7 @@ services:
   magento-db:
     image: mariadb:10.6
     container_name: matre_magento_db
+    restart: unless-stopped
     environment:
       MYSQL_DATABASE: magento
       MYSQL_USER: magento
@@ -315,6 +323,7 @@ services:
   magento-opensearch:
     image: opensearchproject/opensearch:2.14.0
     container_name: matre_magento_opensearch
+    restart: unless-stopped
     environment:
       - discovery.type=single-node
       - DISABLE_SECURITY_PLUGIN=true
@@ -329,6 +338,7 @@ services:
   magento-redis:
     image: redis:7-alpine
     container_name: matre_magento_redis
+    restart: unless-stopped
     networks:
       matre_network:
         ipv4_address: 172.21.0.100
