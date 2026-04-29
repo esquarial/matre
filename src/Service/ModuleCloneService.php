@@ -284,7 +284,7 @@ class ModuleCloneService
     private function isAtLatestCommit(string $targetPath): bool
     {
         $localHash = $this->getCommitHash($targetPath);
-        if ($localHash === null) {
+        if (null === $localHash) {
             return false;
         }
 

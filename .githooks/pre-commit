@@ -27,6 +27,12 @@ echo -e "${BLUE}Files to check:${NC}"
 echo "$STAGED_FILES"
 echo ""
 
+# Detect Docker — host PHP version may not match composer requirements
+DOCKER_PHP=""
+if docker compose ps --status running 2>/dev/null | grep -q "php"; then
+    DOCKER_PHP="docker compose exec -T php"
+fi
+
 # Check 1: PHP Syntax Check
 echo -e "${BLUE}[1/4] PHP Syntax Check...${NC}"
 SYNTAX_ERROR=0
@@ -46,19 +52,19 @@ fi
 echo -e "${GREEN}✓ Syntax check passed${NC}"
 echo ""
 
-# Check 2: PHP-CS-Fixer
+# Check 2: PHP-CS-Fixer (run inside Docker to avoid host PHP version mismatch)
 echo -e "${BLUE}[2/4] Code Style Check (PHP-CS-Fixer)...${NC}"
-if [ -f "vendor/bin/php-cs-fixer" ]; then
-    vendor/bin/php-cs-fixer fix --dry-run --diff --verbose $(echo "$STAGED_FILES" | tr '\n' ' ')
+if [ -n "$DOCKER_PHP" ]; then
+    $DOCKER_PHP vendor/bin/php-cs-fixer fix --config=.php-cs-fixer.dist.php --dry-run --diff $(echo "$STAGED_FILES" | tr '\n' ' ')
     if [ $? -ne 0 ]; then
         echo -e "${YELLOW}⚠ Code style issues found${NC}"
-        echo -e "${YELLOW}Run 'make cs-fix' or 'vendor/bin/php-cs-fixer fix' to auto-fix${NC}"
+        echo -e "${YELLOW}Run './local.sh fix' to auto-fix${NC}"
 
         # Ask if user wants to auto-fix
         read -p "Auto-fix code style issues? (y/n) " -n 1 -r
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
-            vendor/bin/php-cs-fixer fix $(echo "$STAGED_FILES" | tr '\n' ' ')
+            $DOCKER_PHP vendor/bin/php-cs-fixer fix --config=.php-cs-fixer.dist.php $(echo "$STAGED_FILES" | tr '\n' ' ')
             # Re-stage fixed files
             git add $STAGED_FILES
             echo -e "${GREEN}✓ Code style fixed and files re-staged${NC}"
@@ -70,22 +76,15 @@ if [ -f "vendor/bin/php-cs-fixer" ]; then
         echo -e "${GREEN}✓ Code style check passed${NC}"
     fi
 else
-    echo -e "${YELLOW}⚠ PHP-CS-Fixer not installed (skipping)${NC}"
+    echo -e "${YELLOW}⚠ Docker not running (skipping CS check)${NC}"
 fi
 echo ""
 
-# Check 3: PHPStan (only on changed files)
+# Check 3: PHPStan (only on changed files, inside Docker)
 echo -e "${BLUE}[3/4] Static Analysis (PHPStan)...${NC}"
-if [ -f "vendor/bin/phpstan" ]; then
-    # Create temporary list of files to analyze
-    TEMP_FILE=$(mktemp)
-    echo "$STAGED_FILES" | tr ' ' '\n' > "$TEMP_FILE"
-
-    vendor/bin/phpstan analyse --no-progress --error-format=table $(cat "$TEMP_FILE")
-    PHPSTAN_EXIT=$?
-    rm "$TEMP_FILE"
-
-    if [ $PHPSTAN_EXIT -ne 0 ]; then
+if [ -n "$DOCKER_PHP" ]; then
+    $DOCKER_PHP vendor/bin/phpstan analyse --memory-limit=512M --no-progress --error-format=table $(echo "$STAGED_FILES" | tr '\n' ' ')
+    if [ $? -ne 0 ]; then
         echo -e "${RED}✗ PHPStan found issues${NC}"
         echo -e "${YELLOW}Fix issues or use 'git commit --no-verify' to skip${NC}"
         exit 1
@@ -93,7 +92,7 @@ if [ -f "vendor/bin/phpstan" ]; then
         echo -e "${GREEN}✓ Static analysis passed${NC}"
     fi
 else
-    echo -e "${YELLOW}⚠ PHPStan not installed (skipping)${NC}"
+    echo -e "${YELLOW}⚠ Docker not running (skipping PHPStan)${NC}"
 fi
 echo ""
 

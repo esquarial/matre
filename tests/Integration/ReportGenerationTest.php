@@ -185,6 +185,7 @@ class ReportGenerationTest extends KernelTestCase
         // Create a result file referencing an attachment
         $resultData = [
             'name' => 'MOEC2609',
+            'fullName' => 'App\\Tests\\MOEC2609',
             'attachments' => [
                 ['source' => 'screenshot.png', 'name' => 'Screenshot'],
             ],

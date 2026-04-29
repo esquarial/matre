@@ -123,7 +123,7 @@ class ArtifactCollectionTest extends KernelTestCase
         $result1->setTestRun($run);
         $result1->setTestName('CheckoutTest');
         $result1->setTestId('MOEC2609');
-        $result1->setStatus(TestResult::STATUS_PASSED);
+        $result1->setStatus(TestResult::STATUS_FAILED);
 
         $result2 = new TestResult();
         $result2->setTestRun($run);
