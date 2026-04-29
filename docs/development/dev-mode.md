@@ -162,7 +162,7 @@ volumes:
 echo "DEV_MODULE_PATH=./test-module" >> .env
 
 # Restart workers to pick up change
-docker compose restart matre_test_worker
+docker compose restart test-worker
 ```
 
 **Disable dev mode (use git clone):**
@@ -172,7 +172,7 @@ docker compose restart matre_test_worker
 sed -i '' 's/DEV_MODULE_PATH=.*/DEV_MODULE_PATH=/' .env
 
 # Restart workers
-docker compose restart matre_test_worker
+docker compose restart test-worker
 ```
 
 **Check current mode:**
@@ -190,7 +190,7 @@ Typical workflow for test development:
 ```bash
 # 1. Enable dev mode
 echo "DEV_MODULE_PATH=./test-module" >> .env
-docker compose restart matre_test_worker
+docker compose restart test-worker
 
 # 2. Make changes to test files
 vim test-module/Test/Mftf/Test/MyNewTest.xml
@@ -208,7 +208,7 @@ git push
 
 # 6. Optionally switch back to production mode
 sed -i '' 's/DEV_MODULE_PATH=.*/DEV_MODULE_PATH=/' .env
-docker compose restart matre_test_worker
+docker compose restart test-worker
 ```
 
 ### Performance Comparison

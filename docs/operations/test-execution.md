@@ -38,7 +38,7 @@ Before running tests, ensure:
 Test runs display real-time status updates:
 
 ```
-pending → preparing → cloning → running → reporting → completed
+pending → preparing → cloning → waiting → running → reporting → completed/failed/cancelled
 ```
 
 | Status | Description |
@@ -46,11 +46,12 @@ pending → preparing → cloning → running → reporting → completed
 | pending | Queued for execution |
 | preparing | Setting up test environment |
 | cloning | Fetching test module from repository |
+| waiting | Waiting for the per-environment execution lock |
 | running | Executing tests |
 | reporting | Generating Allure report |
 | completed | Finished successfully |
 | failed | Execution error occurred |
-| canceled | Manually stopped |
+| cancelled | Manually stopped |
 
 ### Live Browser Preview
 
@@ -219,22 +220,23 @@ This allows the "Used in Tests" column in Admin → Environment Variables to sho
 ## Execution Pipeline
 
 ```
-┌─────────┐    ┌───────────┐    ┌─────────┐    ┌─────────┐    ┌───────────┐    ┌───────────┐
-│ pending │ → │ preparing │ → │ cloning │ → │ running │ → │ reporting │ → │ completed │
-└─────────┘    └───────────┘    └─────────┘    └─────────┘    └───────────┘    └───────────┘
-                    │               │             │               │
-                    ↓               ↓             ↓               ↓
-               Module prep    Git clone    MFTF/Playwright    Allure
-               validation     from repo    execution          generation
+┌─────────┐    ┌───────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐    ┌───────────┐    ┌───────────┐
+│ pending │ → │ preparing │ → │ cloning │ → │ waiting │ → │ running │ → │ reporting │ → │ completed │
+└─────────┘    └───────────┘    └─────────┘    └─────────┘    └─────────┘    └───────────┘    └───────────┘
+                    │               │             │             │               │
+                    ↓               ↓             ↓             ↓               ↓
+               Module prep    Git clone    Env lock      MFTF/Playwright    Allure
+               validation     from repo    acquisition   execution          generation
 ```
 
 ### Phase Details
 
 1. **Preparing** - Validate environment, check prerequisites
 2. **Cloning** - Clone test module from `TEST_MODULE_REPO` (or symlink if `DEV_MODULE_PATH` set)
-3. **Running** - Execute tests via MFTF or Playwright executor
-4. **Reporting** - Merge results, generate Allure HTML report
-5. **Completed/Failed** - Final status with results stored
+3. **Waiting** - Wait for the per-environment lock if another run is active
+4. **Running** - Execute tests via MFTF or Playwright executor
+5. **Reporting** - Merge results, generate Allure HTML report
+6. **Completed/Failed/Cancelled** - Final status with results stored
 
 ---
 

@@ -250,7 +250,12 @@ Never commit secrets. Use `.env.local`:
 
 ```dotenv
 APP_SECRET=your-secret-key
-DATABASE_URL=mysql://user:password@localhost/db
+DB_DRIVER=pdo_mysql
+DB_HOST=localhost
+DB_PORT=3306
+DB_NAME=matre
+DB_USER=user
+DB_PASS=password
 ```
 
 ### .gitignore

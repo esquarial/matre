@@ -76,7 +76,7 @@ Quick solutions organized by symptom.
 **Solutions:**
 1. Verify Magento container running:
    ```bash
-   docker compose ps matre_magento
+   docker compose ps magento
    ```
 2. Check MFTF installation:
    ```bash
@@ -84,7 +84,7 @@ Quick solutions organized by symptom.
    ```
 3. Rebuild Magento container:
    ```bash
-   docker compose up -d --build matre_magento
+   docker compose up -d --build magento
    ```
 
 ---
@@ -122,7 +122,7 @@ Quick solutions organized by symptom.
    ```
 3. Check test worker logs:
    ```bash
-   docker compose logs matre_test_worker | grep -i allure
+   docker compose logs test-worker | grep -i allure
    ```
 
 ### "Screenshots not loading"
@@ -163,12 +163,12 @@ Quick solutions organized by symptom.
 **Solutions:**
 1. Check scheduler container:
    ```bash
-   docker compose ps matre_scheduler
-   docker compose logs matre_scheduler
+   docker compose ps scheduler
+   docker compose logs scheduler
    ```
 2. Restart scheduler:
    ```bash
-   docker compose restart matre_scheduler
+   docker compose restart scheduler
    ```
 3. Verify job is active:
    ```bash
@@ -406,7 +406,7 @@ Full guide: [Disaster Recovery → Database Stale Locks](disaster-recovery.md#db
 **Solutions:**
 1. Check database container:
    ```bash
-   docker compose ps matre_db
+   docker compose ps db
    ```
 2. Test connection:
    ```bash
@@ -437,12 +437,12 @@ Full guide: [Disaster Recovery → Database Stale Locks](disaster-recovery.md#db
 **Solutions:**
 1. Check worker container:
    ```bash
-   docker compose ps matre_test_worker
-   docker compose logs matre_test_worker
+   docker compose ps test-worker
+   docker compose logs test-worker
    ```
 2. Restart worker:
    ```bash
-   docker compose restart matre_test_worker
+   docker compose restart test-worker
    ```
 3. Check pending messages:
    ```bash

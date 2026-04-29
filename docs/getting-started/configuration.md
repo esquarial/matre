@@ -74,18 +74,18 @@ MAILER_DSN=smtp://mailpit:1025
 
 ## Docker Services
 
-### matre_php
+### php (`matre_php`)
 - **Image:** Custom (from Dockerfile)
 - **Target:** `app_dev` stage
 - **Extensions:** GD, IntL, ZIP, PDO MySQL, GMP
 - **Volumes:** Application code, vendor (named volume)
 
-### matre_nginx
+### nginx (`matre_nginx`)
 - **Image:** `nginx:1.25-alpine`
 - **Port:** 8089 → 80
 - **Config:** `docker/nginx/default.conf`
 
-### matre_db
+### db (`matre_db`)
 - **Image:** `mariadb:11`
 - **Port:** 33067 → 3306
 - **Credentials:**
@@ -94,53 +94,53 @@ MAILER_DSN=smtp://mailpit:1025
   - Password: `matre`
   - Root password: `matre_root`
 
-### matre_mailpit
+### mailpit (`matre_mailpit`)
 - **Image:** `axllent/mailpit:latest`
 - **Ports:**
   - 1031 → 1025 (SMTP)
   - 8031 → 8025 (Web UI)
 - **Usage:** All emails sent by the app appear in the web UI
 
-### matre_frontend_build
+### frontend-build (`matre_frontend_build`)
 - **Image:** `node:20-alpine`
 - **Command:** `npm install && npm run build`
 - **Purpose:** Builds Vite assets on container startup
 - **Output:** `public/build/`
 
-### matre_scheduler
+### scheduler (`matre_scheduler`)
 - **Image:** Custom (from Dockerfile)
-- **Command:** `php bin/console messenger:consume scheduler_test_runner scheduler_cron scheduled_test_messages --time-limit=60 -vv`
+- **Command:** `php bin/console messenger:consume async scheduler_test_runner scheduler_cron scheduled_test_messages --time-limit=60 -vv`
 - **Purpose:** Processes scheduled test runs
 - **Restart:** `unless-stopped`
 
-### matre_test_worker
+### test-worker
 - **Image:** Custom (from Dockerfile)
-- **Command:** `php bin/console messenger:consume test_runner --time-limit=3600 -vv`
+- **Command:** `php -d memory_limit=1G bin/console messenger:consume test_runner_per_env --time-limit=3600 -vv`
 - **Purpose:** Executes test runs asynchronously
 - **Restart:** `unless-stopped`
 
-### matre_selenium_hub
-- **Image:** `selenium/hub:4.15`
+### selenium-hub (`matre_selenium_hub`)
+- **Image:** `selenium/hub:4.40.0-20260120`
 - **Ports:** 4442, 4443, 4444
 - **Purpose:** Selenium Grid coordinator
 
-### matre_chrome_node
-- **Image:** `selenium/node-chrome:4.15`
+### chrome-node
+- **Image:** `selenium/node-chromium:4.40.0-20260120`
 - **Port:** 7900 (noVNC live browser preview)
 - **Purpose:** Chrome browser for MFTF tests
-- **Sessions:** 2 concurrent
+- **Sessions:** controlled by `SE_NODE_MAX_SESSIONS` (default: 1 locally)
 
-### matre_playwright
+### playwright (`matre_playwright`)
 - **Image:** Custom (from `docker/playwright/Dockerfile`)
 - **Purpose:** Playwright test execution
 - **Volumes:** `var/playwright-results/`
 
-### matre_allure
+### allure (`matre_allure`)
 - **Image:** `frankescobar/allure-docker-service:latest`
 - **Ports:** 5050, 5252
 - **Purpose:** Allure report generation and serving
 
-### matre_magento
+### magento (`matre_magento`)
 - **Image:** Custom (from `docker/magento/Dockerfile`)
 - **Purpose:** Magento 2 environment for MFTF execution
 - **Volumes:** `var/mftf-results/`
@@ -186,17 +186,19 @@ security:
 framework:
     messenger:
         transports:
-            test_runner:
+            async:
                 dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
+            test_runner_per_env:
+                dsn: 'per-env-doctrine://default'
                 options:
-                    queue_name: test_runner
+                    table_name: messenger_messages
             scheduled_test_messages:
                 dsn: '%env(MESSENGER_TRANSPORT_DSN)%'
                 options:
                     queue_name: scheduled_test_messages
 
         routing:
-            'App\Message\TestRunMessage': test_runner
+            'App\Message\TestRunMessage': test_runner_per_env
             'App\Message\ScheduledTestRunMessage': scheduled_test_messages
 ```
 
@@ -266,7 +268,7 @@ Test environments are configured in the database via the Admin UI:
 | `backendName` | Admin path (default: "admin") |
 | `adminUsername` | Magento admin username |
 | `adminPassword` | Magento admin password |
-| `customVariables` | JSON object of custom env vars |
+| `envVariables` | JSON object of custom env vars |
 
 ### Custom Variables Example
 

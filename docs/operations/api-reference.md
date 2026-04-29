@@ -80,9 +80,10 @@ List test runs with pagination and filtering.
 |-------|------|---------|-------------|
 | `page` | int | 1 | Page number |
 | `limit` | int | 20 | Items per page (max: 100) |
-| `status` | string | - | Filter: `pending`, `running`, `completed`, `failed`, `cancelled` |
+| `status` | string | - | Filter: `pending`, `preparing`, `cloning`, `waiting`, `running`, `reporting`, `completed`, `failed`, `cancelled` |
 | `type` | string | - | Filter: `mftf`, `playwright`, `both` |
 | `environment` | int | - | Filter by environment ID |
+| `suite` | int | - | Filter by suite ID |
 
 **Example:**
 ```bash
@@ -97,26 +98,34 @@ curl "http://localhost:8089/api/test-runs?status=completed&limit=10"
       "id": 42,
       "status": "completed",
       "type": "mftf",
+      "testFilter": "SmokeTestGroup",
       "triggeredBy": "manual",
+      "createdAt": "2026-01-15T10:30:00+00:00",
+      "startedAt": "2026-01-15T10:30:05+00:00",
+      "completedAt": "2026-01-15T10:35:28+00:00",
       "duration": "5m 23s",
       "environment": {
         "id": 1,
         "name": "Staging",
-        "code": "staging"
+        "code": "staging",
+        "region": "default"
       },
       "suite": {
         "id": 3,
         "name": "Smoke Tests"
       },
+      "executedBy": {
+        "id": 1,
+        "username": "admin"
+      },
       "resultCounts": {
         "passed": 95,
         "failed": 2,
         "skipped": 3,
+        "broken": 0,
         "total": 100
       },
-      "createdAt": "2025-01-15T10:30:00Z",
-      "startedAt": "2025-01-15T10:30:05Z",
-      "completedAt": "2025-01-15T10:35:28Z"
+      "canBeCancelled": false
     }
   ],
   "meta": {
@@ -145,41 +154,52 @@ curl "http://localhost:8089/api/test-runs/42"
   "id": 42,
   "status": "completed",
   "type": "mftf",
-  "triggeredBy": "manual",
   "testFilter": "SmokeTestGroup",
+  "triggeredBy": "manual",
+  "createdAt": "2026-01-15T10:30:00+00:00",
+  "startedAt": "2026-01-15T10:30:05+00:00",
+  "completedAt": "2026-01-15T10:35:28+00:00",
   "duration": "5m 23s",
   "environment": {
     "id": 1,
     "name": "Staging",
     "code": "staging",
-    "baseUrl": "https://staging.example.com"
+    "region": "default"
   },
   "suite": {
     "id": 3,
     "name": "Smoke Tests"
   },
+  "executedBy": {
+    "id": 1,
+    "username": "admin"
+  },
   "resultCounts": {
     "passed": 95,
     "failed": 2,
     "skipped": 3,
+    "broken": 0,
     "total": 100
   },
+  "canBeCancelled": false,
+  "output": "Console output...",
+  "errorMessage": null,
   "results": [
     {
       "id": 1001,
       "testName": "StorefrontCheckoutTest",
+      "testId": "StorefrontCheckoutTest",
       "status": "passed",
       "duration": 12500,
-      "errorMessage": null,
-      "screenshotPath": null
+      "errorMessage": null
     },
     {
       "id": 1002,
       "testName": "AdminCreateProductTest",
+      "testId": "AdminCreateProductTest",
       "status": "failed",
       "duration": 8200,
-      "errorMessage": "Element #save-button not found",
-      "screenshotPath": "/test-artifacts/42/screenshot-1002.png"
+      "errorMessage": "Element #save-button not found"
     }
   ],
   "reports": [
@@ -187,12 +207,9 @@ curl "http://localhost:8089/api/test-runs/42"
       "id": 15,
       "type": "allure",
       "publicUrl": "http://localhost:5050/allure-docker-service/projects/run-42/reports/latest",
-      "expiresAt": "2025-02-14T10:35:28Z"
+      "generatedAt": "2026-01-15T10:35:28+00:00"
     }
-  ],
-  "createdAt": "2025-01-15T10:30:00Z",
-  "startedAt": "2025-01-15T10:30:05Z",
-  "completedAt": "2025-01-15T10:35:28Z"
+  ]
 }
 ```
 
@@ -203,15 +220,20 @@ curl "http://localhost:8089/api/test-runs/42"
 Cancel a running test.
 
 **Requirements:**
-- Test must be in `running` or `pending` status
+- Test must not be in a terminal status (`completed`, `failed`, `cancelled`)
 - User must have `ROLE_ADMIN`
+- Header `X-CSRF-Token` must contain a token valid for `test_run_api`
 
 **Response:**
 ```json
 {
-  "id": 42,
-  "status": "cancelled",
-  "message": "Test run canceled successfully"
+  "message": "Run cancelled",
+  "run": {
+    "id": 42,
+    "status": "cancelled",
+    "type": "mftf",
+    "canBeCancelled": false
+  }
 }
 ```
 
@@ -222,14 +244,19 @@ Cancel a running test.
 Retry a failed test.
 
 **Requirements:**
-- Test must be in `failed` or `canceled` status
+- User must have `ROLE_ADMIN`
+- Header `X-CSRF-Token` must contain a token valid for `test_run_api`
 
 **Response:**
 ```json
 {
-  "id": 42,
-  "status": "pending",
-  "message": "Test run queued for retry"
+  "message": "New run created",
+  "run": {
+    "id": 43,
+    "status": "pending",
+    "type": "mftf",
+    "canBeCancelled": true
+  }
 }
 ```
 

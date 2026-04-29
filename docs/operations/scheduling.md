@@ -131,12 +131,12 @@ Output: Test run #42 completed. 15 passed, 0 failed.
 
 ### Docker (Automatic)
 
-In Docker environment, the `matre_scheduler` container handles all scheduling automatically:
+In Docker environment, the `scheduler` service (`matre_scheduler` container) handles all scheduling automatically:
 
 ```yaml
 # docker-compose.yml
 scheduler:
-  command: php bin/console messenger:consume scheduler_test_runner scheduler_cron scheduled_test_messages --time-limit=60 -vv
+  command: php bin/console messenger:consume async scheduler_test_runner scheduler_cron scheduled_test_messages --time-limit=60 -vv
   restart: unless-stopped
 ```
 

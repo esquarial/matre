@@ -29,7 +29,7 @@ Get MATRE running and execute your first MFTF test in minutes.
 git clone <repository-url> matre
 cd matre
 cp .env.example .env
-# Edit .env (see .env.example for DATABASE_URL, TEST_MODULE_REPO, etc.)
+# Edit .env (see .env.example for DB_*, TEST_MODULE_REPO, etc.)
 
 # Start local development
 chmod +x local.sh
@@ -48,10 +48,10 @@ This runs migrations automatically and shows access URLs.
 **Access points:**
 | Service | URL |
 |---------|-----|
-| MATRE App | http://localhost:8080 |
+| MATRE App | http://localhost:8089 |
 | Selenium Grid | http://localhost:4444 |
 | Allure Reports | http://localhost:5050 |
-| Mailpit (dev) | http://localhost:8025 |
+| Mailpit (dev) | http://localhost:8031 |
 
 ### Create Admin User
 
@@ -79,7 +79,7 @@ A Test Environment represents a target Magento instance where tests will run.
 | Field | Example | Description |
 |-------|---------|-------------|
 | Name | `dev-us` | Display name |
-| Code | `dev` | Environment code |
+| Code | `dev-us` | Unique environment code |
 | Region | `us` | Region identifier |
 | Base URL | `https://dev-us.example.com/` | Magento storefront URL |
 | Backend Name | `admin` | Admin panel path |
@@ -295,7 +295,7 @@ app:env:import [<env>] --clone [--dry-run] [--overwrite]
 
 # System
 app:create-admin                    # Create admin user
-app:check-magento <env>             # Validate Magento connectivity
+app:test:check-magento              # Validate Magento/MFTF/Selenium/Allure connectivity
 app:cron:list                       # List scheduled jobs
 app:cron:run <job-id>               # Run job manually
 ```
@@ -312,10 +312,14 @@ app:cron:run <job-id>               # Run job manually
 
 | Status | Description |
 |--------|-------------|
-| Pending | Queued, waiting for worker |
+| Pending | Queued for execution |
+| Preparing | Setting up the run |
+| Cloning | Fetching the test module |
+| Waiting | Waiting for the per-environment lock |
 | Running | Currently executing |
+| Reporting | Generating reports |
 | Completed | Finished successfully |
-| Failed | Finished with test failures |
+| Failed | Execution error or failed run |
 | Cancelled | Manually cancelled |
 
 ---

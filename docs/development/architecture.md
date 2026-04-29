@@ -4,7 +4,7 @@
 
 | Layer | Technology |
 |-------|------------|
-| Backend | Symfony 7.4, PHP 8.5 |
+| Backend | Symfony 8.0, PHP 8.5 |
 | ORM | Doctrine ORM 3 |
 | Frontend | Vue 3, Tailwind CSS |
 | Build | Vite |

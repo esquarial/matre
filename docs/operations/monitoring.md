@@ -130,14 +130,14 @@ Shows grid ready state and available browser nodes.
 
 Test execution logs:
 ```bash
-docker compose logs -f matre_test_worker
+docker compose logs -f test-worker
 ```
 
 ### Scheduler
 
 Cron job execution logs:
 ```bash
-docker compose logs -f matre_scheduler
+docker compose logs -f scheduler
 ```
 
 ### All Services
@@ -150,10 +150,10 @@ docker compose logs -f
 
 ```bash
 # Last 100 lines
-docker compose logs --tail=100 matre_php
+docker compose logs --tail=100 php
 
 # Follow with timestamps
-docker compose logs -f -t matre_php
+docker compose logs -f -t php
 ```
 
 ---
@@ -168,7 +168,7 @@ docker compose exec db mysql -umatre -pmatre -e \
 ```
 
 Expected queues:
-- `test_runner` - Test execution messages
+- `test_runner_per_env` / `test_runner_env_{environmentId}` - Per-environment test execution messages
 - `scheduled_test_messages` - Scheduled test messages
 - `async` - Email/notification messages
 

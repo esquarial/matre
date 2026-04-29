@@ -225,7 +225,15 @@ public function testServiceWithMockedDependency(): void
 Configure a test database in `.env.test`:
 
 ```dotenv
-DATABASE_URL="mysql://root:password@127.0.0.1:3306/matre_test?serverVersion=8.0"
+APP_ENV=test
+DB_DRIVER=pdo_mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_NAME=matre_test
+DB_USER=root
+DB_PASS=password
+DB_VERSION=8.0
+DB_CHARSET=utf8mb4
 ```
 
 Setup test database:

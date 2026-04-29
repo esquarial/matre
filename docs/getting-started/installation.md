@@ -32,19 +32,19 @@ This starts all services:
 
 | Service | Description | Port |
 |---------|-------------|------|
-| matre_php | PHP 8.5 FPM | - |
-| matre_nginx | Web server | 8089 |
-| matre_db | MariaDB 11 | 33067 |
-| matre_mailpit | Email testing | 1031 (SMTP), 8031 (UI) |
-| matre_frontend_build | Vite asset builder | - |
-| matre_scheduler | Cron job worker | - |
-| matre_test_worker | Test execution worker | - |
-| matre_selenium_hub | Selenium Grid hub | 4444 |
-| matre_chrome_node | Chrome/Chromium browser node | - |
-| matre_playwright | Playwright runner | - |
-| matre_opensearch | OpenSearch 2.14 (Magento search) | 9200 |
-| matre_allure | Allure report service | 5050 |
-| matre_magento | Magento MFTF environment | - |
+| php (`matre_php`) | PHP 8.5 FPM | - |
+| nginx (`matre_nginx`) | Web server | 8089 |
+| db (`matre_db`) | MariaDB 11 | 33067 |
+| mailpit (`matre_mailpit`) | Email testing | 1031 (SMTP), 8031 (UI) |
+| frontend-build (`matre_frontend_build`) | Vite asset builder | - |
+| scheduler (`matre_scheduler`) | Cron job worker | - |
+| test-worker | Test execution worker | - |
+| selenium-hub (`matre_selenium_hub`) | Selenium Grid hub | 4444 |
+| chrome-node | Chrome/Chromium browser node | dynamic noVNC port |
+| playwright (`matre_playwright`) | Playwright runner | - |
+| magento-opensearch (`matre_magento_opensearch`) | OpenSearch 2.14 (Magento search) | - |
+| allure (`matre_allure`) | Allure report service | 5050 |
+| magento (`matre_magento`) | Magento MFTF environment | - |
 
 ### 2. Frontend Build
 
@@ -85,9 +85,9 @@ docker compose up -d
 docker compose down
 
 # View logs
-docker compose logs -f matre_php
-docker compose logs -f matre_test_worker
-docker compose logs -f matre_scheduler
+docker compose logs -f php
+docker compose logs -f test-worker
+docker compose logs -f scheduler
 
 # Run Symfony commands
 docker compose exec php php bin/console <command>
@@ -176,19 +176,19 @@ The Twig helpers (`vite_entry_script_tags`) automatically detect dev mode and se
 MATRE includes a complete test infrastructure:
 
 ### Selenium Grid
-- Hub: `matre_selenium_hub` on port 4444
-- Chrome node: `matre_chrome_node` with 2 sessions
+- Hub service: `selenium-hub` (`matre_selenium_hub`) on port 4444
+- Browser service: `chrome-node`; local session count defaults to 1 via `SE_NODE_MAX_SESSIONS`
 
 ### Playwright
-- Container: `matre_playwright`
+- Service: `playwright` (`matre_playwright`)
 - Results: `var/playwright-results/`
 
 ### Magento (MFTF)
-- Container: `matre_magento`
+- Service: `magento` (`matre_magento`)
 - Results: `var/mftf-results/`
 
 ### Allure Reports
-- Container: `matre_allure` on port 5050
+- Service: `allure` (`matre_allure`) on port 5050
 - Results: `var/allure-results/`
 
 ---
@@ -223,10 +223,10 @@ lsof -i :8089
 ### Test worker not processing
 ```bash
 # Check worker logs
-docker compose logs -f matre_test_worker
+docker compose logs -f test-worker
 
 # Restart worker
-docker compose restart matre_test_worker
+docker compose restart test-worker
 ```
 
 ---

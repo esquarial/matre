@@ -3,7 +3,7 @@
 Enterprise-grade test automation orchestration for Magento 2.
 
 ![PHP](https://img.shields.io/badge/PHP-8.5-777BB4?logo=php&logoColor=white)
-![Symfony](https://img.shields.io/badge/Symfony-7.4-000000?logo=symfony&logoColor=white)
+![Symfony](https://img.shields.io/badge/Symfony-8.0-000000?logo=symfony&logoColor=white)
 ![Magento](https://img.shields.io/badge/Magento-2.4-EE672F?logo=magento&logoColor=white)
 ![Vue](https://img.shields.io/badge/Vue-3-4FC08D?logo=vue.js&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
@@ -92,22 +92,22 @@ cd matre
 
 ### Execution Flow
 ```
-pending → preparing → cloning → running → reporting → completed/failed
+pending → preparing → cloning → waiting → running → reporting → completed/failed/cancelled
 ```
 
 ### Docker Services
-| Container | Purpose |
-|-----------|---------|
-| `matre_php` | Symfony application |
-| `matre_db` | MariaDB database |
-| `matre_nginx` | Web server |
-| `matre_magento` | MFTF execution environment |
-| `matre_playwright` | Playwright test runner |
-| `matre_selenium_hub` | Selenium Grid hub |
-| `matre_chrome_node` | Chrome browser node |
-| `matre_allure` | Allure report generator |
-| `matre_test_worker` | Async test execution worker |
-| `matre_scheduler` | Cron-based test scheduling |
+| Compose service | Purpose |
+|-----------------|---------|
+| `php` | Symfony application (`matre_php`) |
+| `db` | MariaDB database (`matre_db`) |
+| `nginx` | Web server (`matre_nginx`) |
+| `magento` | MFTF execution environment (`matre_magento`) |
+| `playwright` | Playwright test runner (`matre_playwright`) |
+| `selenium-hub` | Selenium Grid hub (`matre_selenium_hub`) |
+| `chrome-node` | Chromium browser node |
+| `allure` | Allure report generator (`matre_allure`) |
+| `test-worker` | Async test execution worker |
+| `scheduler` | Cron-based test scheduling (`matre_scheduler`) |
 
 ## Configuration
 
@@ -145,7 +145,7 @@ Each environment can have custom variables stored in the database:
 | `backendName` | Admin path (default: "admin") |
 | `adminUsername` | Magento admin username |
 | `adminPassword` | Magento admin password |
-| `customVariables` | JSON object of custom env vars |
+| `envVariables` | JSON object of custom env vars |
 
 ## API Reference
 
@@ -165,30 +165,50 @@ Each environment can have custom variables stored in the database:
   "id": 42,
   "status": "completed",
   "type": "both",
+  "testFilter": "SmokeTestGroup",
+  "triggeredBy": "manual",
+  "createdAt": "2026-01-15T10:30:00+00:00",
+  "startedAt": "2026-01-15T10:30:05+00:00",
+  "completedAt": "2026-01-15T10:35:28+00:00",
   "duration": "5m 23s",
   "environment": {
     "id": 1,
     "name": "Staging",
-    "code": "staging"
+    "code": "staging",
+    "region": "default"
+  },
+  "suite": {
+    "id": 3,
+    "name": "Smoke Tests"
+  },
+  "executedBy": {
+    "id": 1,
+    "username": "admin"
   },
   "resultCounts": {
     "passed": 95,
     "failed": 2,
     "skipped": 3,
+    "broken": 0,
     "total": 100
   },
+  "canBeCancelled": false,
   "results": [
     {
+      "id": 1001,
       "testName": "StorefrontCheckoutTest",
+      "testId": "StorefrontCheckoutTest",
       "status": "passed",
-      "duration": 12.5,
-      "screenshotPath": null
+      "duration": 12500,
+      "errorMessage": null
     }
   ],
   "reports": [
     {
+      "id": 15,
       "type": "allure",
-      "publicUrl": "http://allure:5050/allure-docker-service/projects/run-42/reports/latest"
+      "publicUrl": "http://localhost:5050/allure-docker-service/projects/run-42/reports/latest",
+      "generatedAt": "2026-01-15T10:35:28+00:00"
     }
   ]
 }
@@ -246,7 +266,7 @@ See [tests/README.md](tests/README.md) for full testing documentation.
 
 | Layer | Technology |
 |-------|------------|
-| Backend | Symfony 7.4, PHP 8.5, Doctrine ORM 3 |
+| Backend | Symfony 8.0, PHP 8.5, Doctrine ORM 3 |
 | Frontend | Vue 3, Vite, Tailwind CSS |
 | Database | MariaDB 11 |
 | Testing | MFTF (Codeception), Playwright |

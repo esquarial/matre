@@ -314,7 +314,7 @@ TEST_MODULE_BRANCH=main
 
 ```bash
 # Restart containers to pick up env changes
-docker compose restart php matre_test_worker
+docker compose restart php test-worker
 
 # Test git access (optional)
 docker compose exec php git ls-remote $TEST_MODULE_REPO
@@ -436,7 +436,7 @@ git clone git@github.com:your-org/my-tests.git test-module
 echo "DEV_MODULE_PATH=./test-module" >> .env
 
 # Restart workers
-docker compose restart matre_test_worker
+docker compose restart test-worker
 ```
 
 Now you can:
@@ -621,11 +621,11 @@ open http://localhost:4444
 ### "Environment variable not set"
 
 ```bash
-# List configured variables
-docker compose exec php php bin/console app:env:list
+# Preview imported variables from the configured test module
+docker compose exec php php bin/console app:env:import --clone --dry-run
 
 # Import missing variables
-docker compose exec php php bin/console app:env:import --clone --dry-run
+docker compose exec php php bin/console app:env:import --clone
 ```
 
 ---
@@ -656,12 +656,12 @@ docker compose exec php php bin/console app:test:run mftf <env> --filter="@group
 docker compose exec php php bin/console app:env:import --clone
 
 # Check target Magento
-docker compose exec php php bin/console app:check-magento <env>
+docker compose exec php php bin/console app:test:check-magento
 
 # View worker logs
-docker compose logs -f matre_test_worker
+docker compose logs -f test-worker
 
 # Enable dev mode
 echo "DEV_MODULE_PATH=./test-module" >> .env
-docker compose restart matre_test_worker
+docker compose restart test-worker
 ```
