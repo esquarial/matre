@@ -88,43 +88,43 @@ Run these before pushing:
 
 ### PHPStan
 ```bash
-docker-compose exec php vendor/bin/phpstan analyse
+docker compose exec php vendor/bin/phpstan analyse
 ```
 
 ### PHP-CS-Fixer
 ```bash
 # Check only
-docker-compose exec php vendor/bin/php-cs-fixer fix --dry-run --diff
+docker compose exec php vendor/bin/php-cs-fixer fix --dry-run --diff
 
 # Fix issues
-docker-compose exec php vendor/bin/php-cs-fixer fix
+docker compose exec php vendor/bin/php-cs-fixer fix
 ```
 
 ### PHPUnit
 ```bash
-docker-compose exec php bin/phpunit
+docker compose exec php bin/phpunit
 ```
 
 ### Composer Audit
 ```bash
-docker-compose exec php composer audit
+docker compose exec php composer audit
 ```
 
 ### Doctrine Validation
 ```bash
-docker-compose exec php php bin/console doctrine:schema:validate
+docker compose exec php php bin/console doctrine:schema:validate
 ```
 
 ### Linting
 ```bash
 # PHP syntax
-docker-compose exec php find src -name "*.php" -exec php -l {} \;
+docker compose exec php find src -name "*.php" -exec php -l {} \;
 
 # Twig templates
-docker-compose exec php php bin/console lint:twig templates/
+docker compose exec php php bin/console lint:twig templates/
 
 # YAML configs
-docker-compose exec php php bin/console lint:yaml config/
+docker compose exec php php bin/console lint:yaml config/
 ```
 
 ---
@@ -138,13 +138,13 @@ Run all checks before committing:
 # Save as pre-commit.sh
 
 echo "Running PHPStan..."
-docker-compose exec php vendor/bin/phpstan analyse --no-progress
+docker compose exec php vendor/bin/phpstan analyse --no-progress
 
 echo "Running PHP-CS-Fixer..."
-docker-compose exec php vendor/bin/php-cs-fixer fix --dry-run --diff
+docker compose exec php vendor/bin/php-cs-fixer fix --dry-run --diff
 
 echo "Running PHPUnit..."
-docker-compose exec php bin/phpunit --stop-on-failure
+docker compose exec php bin/phpunit --stop-on-failure
 
 echo "All checks passed!"
 ```
@@ -209,9 +209,9 @@ php bin/console doctrine:migrations:status
 
 ```bash
 # Match CI environment
-docker-compose exec php composer install
-docker-compose exec php bin/phpunit
-docker-compose exec php vendor/bin/phpstan analyse
+docker compose exec php composer install
+docker compose exec php bin/phpunit
+docker compose exec php vendor/bin/phpstan analyse
 ```
 
 ---

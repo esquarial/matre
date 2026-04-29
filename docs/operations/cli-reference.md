@@ -6,22 +6,39 @@ All MATRE commands. Click links for detailed usage.
 
 ## Management Scripts
 
-Wrapper scripts for common operations:
+Wrapper scripts for common operations.
+
+### `./local.sh` (development)
 
 | Command | Description |
-|---------|-------------|
-| `./local.sh start` | Start dev environment with migrations |
+|---|---|
+| `./local.sh start` | `docker compose up -d` + run migrations |
 | `./local.sh stop` | Stop all containers |
-| `./local.sh logs [svc]` | Follow logs |
-| `./local.sh shell` | Open PHP shell |
-| `./local.sh console <cmd>` | Run Symfony console |
+| `./local.sh restart` | Stop + start, with Selenium Grid readiness wait |
+| `./local.sh status` | Show container status |
+| `./local.sh logs [svc]` | Follow logs (all services or one) |
+| `./local.sh shell [svc]` | Open shell (default service: `php`) |
+| `./local.sh console <cmd>` | Run Symfony console command in php container |
 | `./local.sh test` | Run PHPUnit |
-| `./local.sh phpstan` | Run PHPStan |
-| `./local.sh fix` | Fix code style |
-| `./prod.sh start` | Start production |
-| `./prod.sh update` | Update production (pull, recreate, migrate) |
-| `./prod.sh recreate <svc>` | Recreate single service |
-| `./prod.sh status` | Show container status |
+| `./local.sh phpstan` | Run PHPStan static analysis |
+| `./local.sh fix` | Fix code style with PHP-CS-Fixer |
+
+### `./prod.sh` (production)
+
+| Command | Description |
+|---|---|
+| `./prod.sh start` | Start with `production` profile + migrate + cache warmup |
+| `./prod.sh stop` | Stop all containers |
+| `./prod.sh restart` | Stop + start, with Selenium Grid readiness wait |
+| `./prod.sh status` | Container status (highlights workers/scheduler) |
+| `./prod.sh update` | Pull images + recreate + migrate + cache clear (use after composer or compose changes) |
+| `./prod.sh recreate <svc>` | Recreate one service |
+| `./prod.sh logs [svc]` | Follow logs |
+| `./prod.sh shell [svc]` | Open shell (default: `php`) |
+| `./prod.sh console <cmd>` | Run Symfony console command |
+| `./prod.sh frontend` | Build + atomically deploy frontend assets |
+| `./prod.sh frontend --no-cache` | Force fresh frontend build (after package.json/vite.config changes) |
+| `./prod.sh frontend-rollback` | Restore previous frontend build from `public/build.old/` |
 
 ---
 
@@ -32,6 +49,10 @@ Wrapper scripts for common operations:
 | `app:test:run` | Execute MFTF/Playwright tests | [Test Execution](test-execution.md#cli) |
 | `app:test:check-magento` | Pre-flight health check | [Monitoring](monitoring.md#pre-flight) |
 | `app:test:cleanup` | Remove old artifacts/reports | [Allure Reports](allure-reports.md#cleanup) |
+| `app:test:import-env` | Bulk import test environments from .env files | — |
+| `app:test-run:watchdog` | Detect and fail stuck test runs | — |
+| `app:clear-env-locks` | Clear stale per-environment locks | — |
+| `app:containers:cleanup` | Remove orphaned dynamic Magento env containers | — |
 
 ---
 
@@ -43,6 +64,13 @@ Wrapper scripts for common operations:
 | `app:cron:run {id}` | Run job manually | [Scheduling](scheduling.md#manual-run) |
 | `app:cron:install` | Add to system crontab | [Scheduling](scheduling.md#system-install) |
 | `app:cron:remove` | Remove from crontab | [Scheduling](scheduling.md#system-install) |
+
+## Maintenance
+
+| Command | Purpose |
+|---------|---------|
+| `app:audit:cleanup` | Prune old audit log entries |
+| `app:notification:resend` | Resend a failed notification |
 
 ---
 

@@ -240,7 +240,7 @@ Add new Vue islands to `rollupOptions.input`.
 mysql -h 127.0.0.1 -P 33067 -u matre -pmatre matre
 
 # Connect from container
-docker-compose exec db mysql -u matre -pmatre matre
+docker compose exec db mysql -u matre -pmatre matre
 ```
 
 ### GUI Clients

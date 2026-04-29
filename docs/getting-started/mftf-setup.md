@@ -45,7 +45,7 @@ Before starting, ensure you have:
 
 | Requirement | Check |
 |-------------|-------|
-| Docker & Docker Compose | `docker --version && docker-compose --version` |
+| Docker & Docker Compose | `docker --version && docker compose --version` |
 | Git | `git --version` |
 | SSH key or HTTPS credentials for your repos | Access to clone your test module |
 | A Magento 2 instance (dev/staging) | URL + admin credentials |
@@ -132,16 +132,16 @@ cd matre
 cp .env.example .env
 
 # Start all services
-docker-compose up -d --build
+docker compose up -d --build
 
 # Wait for containers to initialize (30-60 seconds)
-docker-compose ps
+docker compose ps
 
 # Run database migrations
-docker-compose exec php php bin/console doctrine:migrations:migrate --no-interaction
+docker compose exec php php bin/console doctrine:migrations:migrate --no-interaction
 
 # Create admin user
-docker-compose exec php php bin/console app:create-admin
+docker compose exec php php bin/console app:create-admin
 ```
 
 **Verify MATRE is running:**
@@ -314,10 +314,10 @@ TEST_MODULE_BRANCH=main
 
 ```bash
 # Restart containers to pick up env changes
-docker-compose restart php matre_test_worker
+docker compose restart php matre_test_worker
 
 # Test git access (optional)
-docker-compose exec php git ls-remote $TEST_MODULE_REPO
+docker compose exec php git ls-remote $TEST_MODULE_REPO
 ```
 
 ---
@@ -359,11 +359,11 @@ MAGENTO_ADMIN_PASSWORD=your-password
 Then import:
 
 ```bash
-docker-compose exec php php bin/console app:test:import-env \
+docker compose exec php php bin/console app:test:import-env \
     /var/www/html/var/test-modules/current/Cron/data --dry-run
 
 # If preview looks good, run without --dry-run
-docker-compose exec php php bin/console app:test:import-env \
+docker compose exec php php bin/console app:test:import-env \
     /var/www/html/var/test-modules/current/Cron/data
 ```
 
@@ -375,10 +375,10 @@ MFTF tests use `{{_ENV.VARIABLE}}` placeholders. Import these from your module:
 
 ```bash
 # Clone module and analyze env variable usage
-docker-compose exec php php bin/console app:env:import --clone
+docker compose exec php php bin/console app:env:import --clone
 
 # Or for specific environment
-docker-compose exec php php bin/console app:env:import dev-us --clone
+docker compose exec php php bin/console app:env:import dev-us --clone
 ```
 
 This will:
@@ -407,15 +407,15 @@ This will:
 
 ```bash
 # Run specific test (sync - waits for completion)
-docker-compose exec php php bin/console app:test:run mftf dev-us \
+docker compose exec php php bin/console app:test:run mftf dev-us \
     --filter="StorefrontHomePageLoad" --sync
 
 # Run test group
-docker-compose exec php php bin/console app:test:run mftf dev-us \
+docker compose exec php php bin/console app:test:run mftf dev-us \
     --filter="@smoke" --sync
 
 # Run all tests (async - returns immediately)
-docker-compose exec php php bin/console app:test:run mftf dev-us
+docker compose exec php php bin/console app:test:run mftf dev-us
 ```
 
 ### Watch Live Execution
@@ -436,7 +436,7 @@ git clone git@github.com:your-org/my-tests.git test-module
 echo "DEV_MODULE_PATH=./test-module" >> .env
 
 # Restart workers
-docker-compose restart matre_test_worker
+docker compose restart matre_test_worker
 ```
 
 Now you can:
@@ -586,33 +586,33 @@ your-module/
 
 ```bash
 # Check git access
-docker-compose exec php git ls-remote $TEST_MODULE_REPO
+docker compose exec php git ls-remote $TEST_MODULE_REPO
 
 # For SSH: ensure key is mounted
-docker-compose exec php ls -la ~/.ssh/
+docker compose exec php ls -la ~/.ssh/
 
 # For HTTPS: verify credentials
-docker-compose exec php env | grep REPO_
+docker compose exec php env | grep REPO_
 ```
 
 ### "Test not found"
 
 ```bash
 # Verify test exists in module
-docker-compose exec php ls -la var/test-modules/current/Test/Mftf/Test/
+docker compose exec php ls -la var/test-modules/current/Test/Mftf/Test/
 
 # Check test name matches exactly (case-sensitive)
-docker-compose exec php grep -r "name=\"YourTestName\"" var/test-modules/current/
+docker compose exec php grep -r "name=\"YourTestName\"" var/test-modules/current/
 ```
 
 ### "Selenium unreachable"
 
 ```bash
 # Check Selenium is running
-docker-compose ps selenium-hub chrome-node
+docker compose ps selenium-hub chrome-node
 
 # View Selenium logs
-docker-compose logs selenium-hub
+docker compose logs selenium-hub
 
 # Access Selenium Grid UI
 open http://localhost:4444
@@ -622,10 +622,10 @@ open http://localhost:4444
 
 ```bash
 # List configured variables
-docker-compose exec php php bin/console app:env:list
+docker compose exec php php bin/console app:env:list
 
 # Import missing variables
-docker-compose exec php php bin/console app:env:import --clone --dry-run
+docker compose exec php php bin/console app:env:import --clone --dry-run
 ```
 
 ---
@@ -644,24 +644,24 @@ docker-compose exec php php bin/console app:env:import --clone --dry-run
 
 ```bash
 # Start MATRE
-docker-compose up -d
+docker compose up -d
 
 # Run test (sync)
-docker-compose exec php php bin/console app:test:run mftf <env> --filter="TestName" --sync
+docker compose exec php php bin/console app:test:run mftf <env> --filter="TestName" --sync
 
 # Run test group
-docker-compose exec php php bin/console app:test:run mftf <env> --filter="@groupName" --sync
+docker compose exec php php bin/console app:test:run mftf <env> --filter="@groupName" --sync
 
 # Import env variables
-docker-compose exec php php bin/console app:env:import --clone
+docker compose exec php php bin/console app:env:import --clone
 
 # Check target Magento
-docker-compose exec php php bin/console app:check-magento <env>
+docker compose exec php php bin/console app:check-magento <env>
 
 # View worker logs
-docker-compose logs -f matre_test_worker
+docker compose logs -f matre_test_worker
 
 # Enable dev mode
 echo "DEV_MODULE_PATH=./test-module" >> .env
-docker-compose restart matre_test_worker
+docker compose restart matre_test_worker
 ```

@@ -14,7 +14,7 @@ Before running tests, ensure:
 2. **Test environment configured** - See [Configuration](../getting-started/configuration.md#test-environment-configuration)
 3. **Health check passes:**
    ```bash
-   docker-compose exec php php bin/console app:test:check-magento
+   docker compose exec php php bin/console app:test:check-magento
    ```
 
 ---
@@ -97,7 +97,7 @@ Sanitized via DOMPurify for security.
 ### Basic Usage
 
 ```bash
-docker-compose exec php php bin/console app:test:run <type> <environment> [options]
+docker compose exec php php bin/console app:test:run <type> <environment> [options]
 ```
 
 **Arguments:**
@@ -118,7 +118,7 @@ docker-compose exec php php bin/console app:test:run <type> <environment> [optio
 Waits for test completion, shows results inline:
 
 ```bash
-docker-compose exec php php bin/console app:test:run mftf staging --sync
+docker compose exec php php bin/console app:test:run mftf staging --sync
 ```
 
 Output:
@@ -142,7 +142,7 @@ Report: http://localhost:5050/allure-docker-service/projects/run-42/reports/late
 Returns immediately, monitor via UI or API:
 
 ```bash
-docker-compose exec php php bin/console app:test:run playwright production
+docker compose exec php php bin/console app:test:run playwright production
 ```
 
 Output:
@@ -155,16 +155,16 @@ Monitor at: http://localhost:8089/admin/test-runs/43
 
 ```bash
 # Run MFTF smoke tests on staging, wait for results
-docker-compose exec php php bin/console app:test:run mftf staging --filter=SmokeTestGroup --sync
+docker compose exec php php bin/console app:test:run mftf staging --filter=SmokeTestGroup --sync
 
 # Run all Playwright tests on production (async)
-docker-compose exec php php bin/console app:test:run playwright production
+docker compose exec php php bin/console app:test:run playwright production
 
 # Run both frameworks with a specific suite
-docker-compose exec php php bin/console app:test:run both staging --suite=regression --sync
+docker compose exec php php bin/console app:test:run both staging --suite=regression --sync
 
 # Run specific test by name pattern
-docker-compose exec php php bin/console app:test:run mftf staging --filter=AdminCreateProduct
+docker compose exec php php bin/console app:test:run mftf staging --filter=AdminCreateProduct
 ```
 
 ---

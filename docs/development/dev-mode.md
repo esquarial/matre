@@ -162,7 +162,7 @@ volumes:
 echo "DEV_MODULE_PATH=./test-module" >> .env
 
 # Restart workers to pick up change
-docker-compose restart matre_test_worker
+docker compose restart matre_test_worker
 ```
 
 **Disable dev mode (use git clone):**
@@ -172,7 +172,7 @@ docker-compose restart matre_test_worker
 sed -i '' 's/DEV_MODULE_PATH=.*/DEV_MODULE_PATH=/' .env
 
 # Restart workers
-docker-compose restart matre_test_worker
+docker compose restart matre_test_worker
 ```
 
 **Check current mode:**
@@ -190,13 +190,13 @@ Typical workflow for test development:
 ```bash
 # 1. Enable dev mode
 echo "DEV_MODULE_PATH=./test-module" >> .env
-docker-compose restart matre_test_worker
+docker compose restart matre_test_worker
 
 # 2. Make changes to test files
 vim test-module/Test/Mftf/Test/MyNewTest.xml
 
 # 3. Run test immediately (no clone needed)
-docker-compose exec php php bin/console app:test:run mftf dev-us \
+docker compose exec php php bin/console app:test:run mftf dev-us \
     --filter="MyNewTest" --sync
 
 # 4. Iterate: edit → run → edit → run
@@ -208,7 +208,7 @@ git push
 
 # 6. Optionally switch back to production mode
 sed -i '' 's/DEV_MODULE_PATH=.*/DEV_MODULE_PATH=/' .env
-docker-compose restart matre_test_worker
+docker compose restart matre_test_worker
 ```
 
 ### Performance Comparison
@@ -260,7 +260,7 @@ var/test-modules/
 
 ```bash
 # Wait for current run to finish before editing
-docker-compose exec php php bin/console app:test:run mftf dev-us --sync
+docker compose exec php php bin/console app:test:run mftf dev-us --sync
 
 # Or use separate module copies for parallel work
 DEV_MODULE_PATH=./test-module-experiment

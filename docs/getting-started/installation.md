@@ -25,7 +25,7 @@
 ```bash
 git clone https://github.com/good-yellow-bee/matre.git
 cd matre
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
 This starts all services:
@@ -59,10 +59,10 @@ The PHP container depends on frontend-build, so assets are ready before the app 
 
 ```bash
 # Create database schema
-docker-compose exec php php bin/console doctrine:migrations:migrate --no-interaction
+docker compose exec php php bin/console doctrine:migrations:migrate --no-interaction
 
 # Load sample data
-docker-compose exec php php bin/console doctrine:fixtures:load --no-interaction
+docker compose exec php php bin/console doctrine:fixtures:load --no-interaction
 ```
 
 ### 4. Access the Application
@@ -79,27 +79,27 @@ docker-compose exec php php bin/console doctrine:fixtures:load --no-interaction
 
 ```bash
 # Start containers
-docker-compose up -d
+docker compose up -d
 
 # Stop containers
-docker-compose down
+docker compose down
 
 # View logs
-docker-compose logs -f matre_php
-docker-compose logs -f matre_test_worker
-docker-compose logs -f matre_scheduler
+docker compose logs -f matre_php
+docker compose logs -f matre_test_worker
+docker compose logs -f matre_scheduler
 
 # Run Symfony commands
-docker-compose exec php php bin/console <command>
+docker compose exec php php bin/console <command>
 
 # Open shell in PHP container
-docker-compose exec php sh
+docker compose exec php sh
 
 # Rebuild containers
-docker-compose up -d --build
+docker compose up -d --build
 
 # Remove volumes (reset database)
-docker-compose down -v
+docker compose down -v
 ```
 
 ---
@@ -223,10 +223,10 @@ lsof -i :8089
 ### Test worker not processing
 ```bash
 # Check worker logs
-docker-compose logs -f matre_test_worker
+docker compose logs -f matre_test_worker
 
 # Restart worker
-docker-compose restart matre_test_worker
+docker compose restart matre_test_worker
 ```
 
 ---
@@ -296,7 +296,7 @@ ssh-keyscan bitbucket.org >> ~/.ssh/known_hosts
 **5. Test SSH Access**
 
 ```bash
-docker-compose exec php ssh -T git@github.com
+docker compose exec php ssh -T git@github.com
 # Should see: "Hi username! You've successfully authenticated..."
 ```
 
@@ -324,7 +324,7 @@ REPO_PASSWORD=ghp_xxxxxxxxxxxx  # Your token
 **3. Test HTTPS Access**
 
 ```bash
-docker-compose exec php git ls-remote $TEST_MODULE_REPO
+docker compose exec php git ls-remote $TEST_MODULE_REPO
 ```
 
 ### Troubleshooting Git Access
@@ -333,14 +333,14 @@ docker-compose exec php git ls-remote $TEST_MODULE_REPO
 
 ```bash
 # Check SSH key is mounted
-docker-compose exec php ls -la /root/.ssh/
+docker compose exec php ls -la /root/.ssh/
 
 # Verify key permissions
-docker-compose exec php chmod 600 /root/.ssh/id_*
-docker-compose exec php chmod 700 /root/.ssh
+docker compose exec php chmod 600 /root/.ssh/id_*
+docker compose exec php chmod 700 /root/.ssh
 
 # Test SSH connection with verbose output
-docker-compose exec php ssh -vT git@github.com
+docker compose exec php ssh -vT git@github.com
 ```
 
 **"Host key verification failed"**
@@ -350,7 +350,7 @@ docker-compose exec php ssh -vT git@github.com
 ssh-keyscan github.com >> ~/.ssh/known_hosts
 
 # Or disable strict host checking (less secure)
-docker-compose exec php sh -c 'echo "StrictHostKeyChecking no" >> /root/.ssh/config'
+docker compose exec php sh -c 'echo "StrictHostKeyChecking no" >> /root/.ssh/config'
 ```
 
 **"Authentication failed" (HTTPS)**

@@ -311,8 +311,8 @@ php bin/console doctrine:migrations:migrate
 
 ### Docker
 ```bash
-docker-compose exec php php bin/console make:migration
-docker-compose exec php php bin/console doctrine:migrations:migrate --no-interaction
+docker compose exec php php bin/console make:migration
+docker compose exec php php bin/console doctrine:migrations:migrate --no-interaction
 ```
 
 ---

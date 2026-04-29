@@ -58,8 +58,8 @@ python3 scripts/allure_cleanup.py -t MOEC2417 --in-suite group1 --dry-run
 | `--env` | `-e` | `all` | Environment shortcut or comma-separated list |
 | `--in-suite` | | | Only remove from these suites (can use multiple times) |
 | `--not-in-suite` | | | Do not remove from these suites (can use multiple times) |
-| `--ssh` | `-s` | `abb` | SSH host alias (use `local` for local execution) |
-| `--base-path` | `-p` | `/home/ubuntu/ABBTests/src/pub/allure-report-{env}` | Base path template |
+| `--ssh` | `-s` | (deployment-specific) | SSH host alias for the production server (use `local` for local execution) |
+| `--base-path` | `-p` | (legacy default — see warning) | Base path template |
 | `--dry-run` | `-n` | | Preview changes without modifying files |
 | `--sudo` | | | Use sudo for file operations |
 
@@ -68,11 +68,11 @@ python3 scripts/allure_cleanup.py -t MOEC2417 --in-suite group1 --dry-run
 ```
 Allure History Cleanup
 ==================================================
-Test IDs: MOEC2417
+Test IDs: TEST-1234
 Environments: stage-us, stage-es, preprod-us, preprod-es
-Base path: /home/ubuntu/ABBTests/src/pub/allure-report-{env}
+Base path: /home/ubuntu/matre/var/allure-projects/{env}/reports/latest
 In suites: group1
-SSH host: abb
+SSH host: <production-server>
 Dry run: False
 Use sudo: True
 
@@ -94,21 +94,27 @@ stage-es: Removed 234 report entries, 234 source files
 Total: 470 report entries + 470 source files removed across 4 environment(s)
 ```
 
+> ⚠️ **The script's built-in default `--base-path` points to a legacy location that is no longer used.** Always pass `--base-path` explicitly, e.g.:
+> ```
+> --base-path '/home/ubuntu/matre/var/allure-projects/{env}/reports/latest'
+> ```
+> Adjust to match your deployment's actual report directory.
+
 ### Recovery
 
 Backups created with `.bak` extension. To restore:
 
 ```bash
-ssh abb "sudo cp /path/to/report/data/behaviors.json.bak /path/to/report/data/behaviors.json"
-ssh abb "sudo cp /path/to/report/data/suites.json.bak /path/to/report/data/suites.json"
-ssh abb "sudo cp /path/to/report/history/history.json.bak /path/to/report/history/history.json"
+ssh <production-server> "sudo cp /path/to/report/data/behaviors.json.bak /path/to/report/data/behaviors.json"
+ssh <production-server> "sudo cp /path/to/report/data/suites.json.bak /path/to/report/data/suites.json"
+ssh <production-server> "sudo cp /path/to/report/history/history.json.bak /path/to/report/history/history.json"
 ```
 
 ---
 
 ## Host Ops Scripts (`scripts/ops`)
 
-Operational scripts for ABB host maintenance and disk safety.
+Operational scripts for production host maintenance and disk safety.
 
 ### Install / Remove Host Cron Entries
 

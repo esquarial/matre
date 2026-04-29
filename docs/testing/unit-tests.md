@@ -10,16 +10,16 @@ This guide covers testing practices for MATRE using PHPUnit.
 ### Docker (Recommended)
 ```bash
 # All tests
-docker-compose exec php bin/phpunit
+docker compose exec php bin/phpunit
 
 # Specific test file
-docker-compose exec php bin/phpunit tests/Unit/Entity/UserTest.php
+docker compose exec php bin/phpunit tests/Unit/Entity/UserTest.php
 
 # Specific test method
-docker-compose exec php bin/phpunit --filter testConstructorSetsDefaults
+docker compose exec php bin/phpunit --filter testConstructorSetsDefaults
 
 # With coverage
-docker-compose exec php bash -c "XDEBUG_MODE=coverage bin/phpunit --coverage-html var/coverage"
+docker compose exec php bash -c "XDEBUG_MODE=coverage bin/phpunit --coverage-html var/coverage"
 ```
 
 ### Local
@@ -246,16 +246,16 @@ php bin/console doctrine:fixtures:load --env=test --no-interaction
 
 ### PHPStan
 ```bash
-docker-compose exec php vendor/bin/phpstan analyse
+docker compose exec php vendor/bin/phpstan analyse
 ```
 
 ### PHP-CS-Fixer
 ```bash
 # Check style
-docker-compose exec php vendor/bin/php-cs-fixer fix --dry-run --diff
+docker compose exec php vendor/bin/php-cs-fixer fix --dry-run --diff
 
 # Fix style
-docker-compose exec php vendor/bin/php-cs-fixer fix
+docker compose exec php vendor/bin/php-cs-fixer fix
 ```
 
 ---

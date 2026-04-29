@@ -78,7 +78,7 @@ Standard 5-field cron format:
 ### List All Jobs
 
 ```bash
-docker-compose exec php php bin/console app:cron:list
+docker compose exec php php bin/console app:cron:list
 ```
 
 Output:
@@ -95,7 +95,7 @@ Output:
 ### Filter Active Only
 
 ```bash
-docker-compose exec php php bin/console app:cron:list --active-only
+docker compose exec php php bin/console app:cron:list --active-only
 ```
 
 ---
@@ -107,13 +107,13 @@ Trigger a scheduled job immediately:
 ### By Job ID
 
 ```bash
-docker-compose exec php php bin/console app:cron:run 1
+docker compose exec php php bin/console app:cron:run 1
 ```
 
 ### Wait for Completion
 
 ```bash
-docker-compose exec php php bin/console app:cron:run 1 --sync
+docker compose exec php php bin/console app:cron:run 1 --sync
 ```
 
 Output:
@@ -218,7 +218,7 @@ Job output is stored in the database. View via Admin UI:
 
 Or via database:
 ```bash
-docker-compose exec db mysql -umatre -pmatre -e \
+docker compose exec db mysql -umatre -pmatre -e \
   "SELECT name, last_status, last_output FROM matre.cron_job WHERE id = 1;"
 ```
 

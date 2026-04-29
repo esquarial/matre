@@ -109,3 +109,6 @@ docker/ssh/known_hosts
 # Python cache
 __pycache__/
 *.pyc
+
+# Private operational files (credentials, handoff docs, etc.)
+/.private/

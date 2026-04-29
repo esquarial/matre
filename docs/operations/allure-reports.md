@@ -72,7 +72,7 @@ A scheduled job runs daily to remove expired reports and artifacts.
 
 Preview what will be deleted (dry run):
 ```bash
-docker-compose exec php php bin/console app:test:cleanup --dry-run
+docker compose exec php php bin/console app:test:cleanup --dry-run
 ```
 
 Output:
@@ -85,7 +85,7 @@ Output:
 
 Execute cleanup:
 ```bash
-docker-compose exec php php bin/console app:test:cleanup
+docker compose exec php php bin/console app:test:cleanup
 ```
 
 ### Options
@@ -100,13 +100,13 @@ docker-compose exec php php bin/console app:test:cleanup
 
 ```bash
 # Delete everything older than 7 days
-docker-compose exec php php bin/console app:test:cleanup --days=7
+docker compose exec php php bin/console app:test:cleanup --days=7
 
 # Preview reports cleanup only
-docker-compose exec php php bin/console app:test:cleanup --reports-only --dry-run
+docker compose exec php php bin/console app:test:cleanup --reports-only --dry-run
 
 # Force cleanup of all reports older than 1 day
-docker-compose exec php php bin/console app:test:cleanup --days=1 --reports-only
+docker compose exec php php bin/console app:test:cleanup --days=1 --reports-only
 ```
 
 ### Batch Cleanup (Advanced)
@@ -141,14 +141,14 @@ Expected: Version string like `"2.24.0"`
 ### View Logs
 
 ```bash
-docker-compose logs allure
-docker-compose logs -f allure  # Follow logs
+docker compose logs allure
+docker compose logs -f allure  # Follow logs
 ```
 
 ### Restart Service
 
 ```bash
-docker-compose restart allure
+docker compose restart allure
 ```
 
 ### List All Projects

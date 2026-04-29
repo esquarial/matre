@@ -128,12 +128,12 @@ Built-in exponential backoff:
      --data '{"text":"Test"}' \
      $SLACK_WEBHOOK_URL
    ```
-3. **Check logs**: `docker-compose logs matre_test_worker | grep -i slack`
+3. **Check logs**: `docker compose logs matre_test_worker | grep -i slack`
 
 ### Email Not Sending
 
 1. **Check env var**: Verify `MAILER_DSN` in `.env`
-2. **Check worker**: `docker-compose ps` - ensure `matre_test_worker` is running
+2. **Check worker**: `docker compose ps` - ensure `matre_test_worker` is running
 3. **Check Mailpit**: http://localhost:8031 shows captured emails in dev
 
 ### User Not Receiving Notifications
@@ -147,6 +147,6 @@ Built-in exponential backoff:
 
 Check message queue status:
 ```bash
-docker-compose exec php php bin/console messenger:stats
-docker-compose exec php php bin/console messenger:failed:show
+docker compose exec php php bin/console messenger:stats
+docker compose exec php php bin/console messenger:failed:show
 ```

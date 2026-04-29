@@ -1,577 +1,350 @@
 # Production Deployment
 
-This guide covers deploying MATRE to production.
+This guide covers deploying MATRE to a production server. MATRE is designed to run as a single Docker compose stack — no separate PHP/nginx host installation required.
 
-## Server Requirements
-
-- **OS:** Ubuntu 22.04 LTS or Debian 12
-- **PHP:** 8.3+ with extensions: fpm, mysql, curl, xml, mbstring, intl, zip, gd, opcache
-- **Database:** MySQL 8.0+ or MariaDB 10.11+
-- **Web Server:** Nginx (recommended) or Apache
-- **Node.js:** 20+ (for building assets)
-- **Composer:** 2.8+
-- **Git**
+> The day-to-day **operations** docs ([Disaster Recovery](../operations/disaster-recovery.md), [Backup & Restore](../operations/backup-restore.md), [Docker Engine](docker-engine.md)) cover what happens after the initial deployment.
 
 ---
 
-## Ubuntu Server Setup
+## Server Requirements
+
+| | |
+|---|---|
+| **OS** | Ubuntu 22.04 LTS or 24.04 LTS (recommended) |
+| **CPU/RAM** | 4 vCPU / 16 GB RAM minimum (more if running >4 parallel workers) |
+| **Disk** | 200 GB+ root volume (Docker images alone are ~45 GB; allocate room for Allure history) |
+| **Docker Engine** | Docker CE 29.x via apt (NOT snap — see [Docker Engine](docker-engine.md)) |
+| **Docker Compose plugin** | v2 (the `docker compose` subcommand) |
+| **Domain** | A record pointing to the server (for Let's Encrypt) |
+| **Open ports** | 80, 443 (web); 22 (SSH from operator IPs) |
+
+The application stack runs entirely in containers — host-side PHP, Nginx, MariaDB are NOT required.
+
+---
+
+## Initial Server Provisioning
+
+### 1. Install Docker CE (apt, not snap)
+
+Ubuntu may ship snap docker by default. **Do not use snap docker for production** — see [Docker Engine](docker-engine.md#why-apt-over-snap) for the reason.
 
 ```bash
-# Update system
-sudo apt update && sudo apt upgrade -y
+# Remove snap docker if present
+sudo snap remove docker || true
 
-# Install Nginx and Git
-sudo apt install -y nginx git
+# Install apt prerequisites
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl gnupg
 
-# Add PHP PPA
-sudo add-apt-repository ppa:ondrej/php -y
-sudo apt update
+# Add Docker's official GPG key
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
+  sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
 
-# Install PHP 8.3
-sudo apt install -y php8.3-fpm php8.3-cli php8.3-mysql php8.3-curl \
-  php8.3-xml php8.3-mbstring php8.3-intl php8.3-zip php8.3-gd php8.3-opcache
+# Add Docker repo
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+  https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list
 
-# Install Composer
-php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
-sudo php composer-setup.php --install-dir=/usr/local/bin --filename=composer
-rm composer-setup.php
+# Install
+sudo apt-get update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io \
+  docker-buildx-plugin docker-compose-plugin
 
-# Install Node.js 20
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-sudo apt install -y nodejs
+# Hold versions to prevent unattended-upgrades from breaking the engine
+sudo apt-mark hold docker-ce docker-ce-cli docker-ce-rootless-extras \
+  containerd.io docker-buildx-plugin docker-compose-plugin
+
+# Add deploy user to docker group
+sudo usermod -aG docker $USER
 ```
+
+### 2. Verify
+
+```bash
+docker --version             # Docker version 29.x.x
+docker compose version       # Docker Compose version v2.x.x
+docker info | grep -E 'Server Version|Storage Driver|Cgroup Driver'
+# Server Version: 29.x.x
+# Storage Driver: overlay2
+# Cgroup Driver: systemd
+```
+
+### 3. Required composer packages
+
+The Redis lock DSN used in production requires `predis/predis`. It's already in `composer.json` — make sure it installs successfully on first build.
 
 ---
 
 ## Application Setup
 
-### 1. Create Deploy User
+### 1. Clone Repository
 
 ```bash
-sudo adduser matre
-sudo usermod -a -G www-data matre
-```
-
-### 2. Clone Repository
-
-```bash
-sudo -i -u matre
 git clone https://github.com/good-yellow-bee/matre.git ~/matre
 cd ~/matre
 ```
 
-### 3. Install Dependencies
+### 2. Configure `.env`
+
+Copy and edit production environment:
 
 ```bash
-composer install --no-dev --optimize-autoloader
-npm install
-npm run build
+cp .env.example .env
 ```
 
-### 4. Configure Environment
-
-Create `.env.prod.local`:
+Production-required settings:
 
 ```dotenv
 APP_ENV=prod
 APP_DEBUG=0
-APP_SECRET=generate-a-strong-secret-key
+APP_SECRET=<generate via: openssl rand -base64 32>
 
-DATABASE_URL="mysql://user:password@localhost:3306/matre?serverVersion=8.0"
-
-MAILER_DSN=smtp://user:pass@smtp.example.com:587
-
-TRUSTED_HOSTS='^your-domain\.com$'
-```
-
-Generate secret:
-```bash
-openssl rand -base64 32
-```
-
-### 5. Setup Database
-
-```bash
-php bin/console doctrine:database:create --env=prod
-php bin/console doctrine:migrations:migrate --env=prod --no-interaction
-```
-
-### 6. Set Permissions
-
-```bash
-sudo chown -R matre:www-data var/
-sudo chmod -R 775 var/
-```
-
----
-
-## Nginx Configuration
-
-Create `/etc/nginx/sites-available/matre`:
-
-```nginx
-server {
-    listen 80;
-    server_name your-domain.com;
-    root /home/matre/matre/public;
-
-    location / {
-        try_files $uri /index.php$is_args$args;
-    }
-
-    location ~ ^/index\.php(/|$) {
-        fastcgi_pass unix:/var/run/php/php8.3-fpm.sock;
-        fastcgi_split_path_info ^(.+\.php)(/.*)$;
-        include fastcgi_params;
-        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
-        fastcgi_param DOCUMENT_ROOT $realpath_root;
-        internal;
-    }
-
-    location ~ \.php$ {
-        return 404;
-    }
-
-    error_log /var/log/nginx/matre_error.log;
-    access_log /var/log/nginx/matre_access.log;
-}
-```
-
-Enable site:
-```bash
-sudo ln -s /etc/nginx/sites-available/matre /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl reload nginx
-```
-
----
-
-## SSL with Let's Encrypt
-
-```bash
-sudo apt install certbot python3-certbot-nginx
-sudo certbot --nginx -d your-domain.com
-```
-
----
-
-## Deploy Script
-
-```bash
-# Enable maintenance mode
-touch public/maintenance.flag
-
-# Pull latest code
-git pull origin master
-
-# Install dependencies
-composer install --no-dev --optimize-autoloader
-
-# Run migrations
-php bin/console doctrine:migrations:migrate --env=prod --no-interaction
-
-# Clear cache
-php bin/console cache:clear --env=prod
-php bin/console cache:warmup --env=prod
-
-# Build assets
-npm install
-npm run build
-
-# Disable maintenance mode
-rm public/maintenance.flag
-```
-
----
-
-## Docker Production
-
-### Build Production Image
-
-```bash
-docker build --target app_prod -t matre:prod .
-```
-
-### docker-compose.prod.yml
-
-```yaml
-services:
-  php:
-    build:
-      context: .
-      target: app_prod
-    environment:
-      APP_ENV: prod
-      APP_DEBUG: 0
-      APP_SECRET: ${APP_SECRET}
-      DATABASE_URL: ${DATABASE_URL}
-
-  nginx:
-    ports:
-      - "80:80"
-      - "443:443"
-```
-
-### Run Production
-
-```bash
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-```
-
----
-
-## Docker Deployment Commands
-
-When deploying code changes in Docker production, you need to **rebuild images** because code is baked into the container (not mounted as volumes).
-
-### Deployment Decision Table
-
-| Change Type | Action | Why |
-|-------------|--------|-----|
-| PHP only | Build + recreate app containers | Code baked into image |
-| Vue/JS/CSS | Build app images + sync `public/build` + recreate app containers | PHP + nginx read host `public/build` (bind-mounted in php) |
-| Composer deps | Build + recreate app containers | `vendor/` baked into image |
-| Docker config | Full `update` via `./prod.sh` | Container configuration changed |
-| DB schema | Run migrations after deploy | Schema changes only |
-
-### Multi-Stage Build Process
-
-The Dockerfile uses multi-stage builds for frontend assets:
-
-```
-┌─────────────────────────────┐
-│  Stage: frontend_build      │
-│  - npm install              │
-│  - npm run build            │
-│  - Output: public/build/    │
-└──────────────┬──────────────┘
-               │ COPY --from=frontend_build
-               ▼
-┌─────────────────────────────┐
-│  Stage: app_prod            │
-│  - composer install         │
-│  - COPY app code            │
-│  - COPY built frontend      │
-└─────────────────────────────┘
-```
-
-This means **any Vue/JS/CSS change requires rebuilding the app images** to regenerate the Vite manifest, then syncing `public/build` to the host for PHP + nginx.
-
-### Frontend assets in docker-compose.prod.yml
-
-In production, app code/vendor come from images, but `./public/build` is bind-mounted into the PHP container so Twig reads the Vite manifest from the host. Nginx also serves `./public` from the host, so keep `public/build` in sync with the latest build output.
-
-Use this workflow for Vue/JS/CSS changes:
-
-```bash
-# 1) Build app images (includes Vite build)
-docker compose -f docker-compose.yml -f docker-compose.prod.yml build php scheduler test-worker
-
-# 2) Sync public/build from the freshly built PHP image (includes manifest.json)
-PHP_IMAGE=$(docker compose -f docker-compose.yml -f docker-compose.prod.yml images -q php)
-docker run --rm -v "$(pwd)/public/build:/host" "$PHP_IMAGE" sh -c 'rm -rf /host/* && cp -r /app/public/build/* /host/'
-
-# 3) Recreate app containers
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate php scheduler test-worker
-```
-
-Do not copy only `public/build/assets` or `public/build/.vite`. The `manifest.json` in `public/build/` must match the hashed files or admin pages will 404.
-
-### Standard Deployment Workflow
-
-```bash
-# 1. Pull latest code
-git pull origin master
-
-# 2. Rebuild app images (triggers frontend build)
-docker compose -f docker-compose.yml -f docker-compose.prod.yml build php scheduler test-worker
-
-# 3. Sync public/build for PHP + nginx (skip if no frontend changes)
-PHP_IMAGE=$(docker compose -f docker-compose.yml -f docker-compose.prod.yml images -q php)
-docker run --rm -v "$(pwd)/public/build:/host" "$PHP_IMAGE" sh -c 'rm -rf /host/* && cp -r /app/public/build/* /host/'
-
-# 4. Deploy with recreate
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate php scheduler test-worker
-
-# 5. Run migrations (if any)
-docker exec matre_php php bin/console doctrine:migrations:migrate --no-interaction
-
-# 6. Clear cache
-docker exec matre_php php bin/console cache:clear --env=prod
-```
-
-### Key Points
-
-- **App code/vendor are baked into the image** — only `public/build` is bind-mounted read-only
-- **`./prod.sh update` does `pull` not `build`** — it's for pulling pre-built images from a registry. Without a registry, you must `build` locally
-- **PHP + nginx read host `./public/build`** — keep it in sync with the latest build output
-- **Only rebuild app containers** — `nginx`, `traefik`, `chrome-node`, `db` rarely need rebuilding
-- **Cache warmup** — always clear cache after deployment to pick up new services/routes
-
-### Quick Reference
-
-```bash
-# Rebuild and deploy (most common)
-docker compose -f docker-compose.yml -f docker-compose.prod.yml build php scheduler test-worker && \
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate php scheduler test-worker
-
-# View build output
-docker compose -f docker-compose.yml -f docker-compose.prod.yml build --progress=plain php
-
-# Check what changed
-docker compose -f docker-compose.yml -f docker-compose.prod.yml config --services
-```
-
----
-
-## Docker with Auto SSL (Recommended)
-
-MATRE includes an embedded Traefik reverse proxy with automatic Let's Encrypt SSL.
-
-### Prerequisites
-
-- Domain pointing to server (DNS A record)
-- Ports 80 and 443 open
-- No other services using these ports
-
-### Setup
-
-1. **Configure environment:**
-
-```bash
-cat > .env.prod.local << 'EOF'
-APP_ENV=prod
-APP_DEBUG=0
-APP_SECRET=$(openssl rand -base64 32)
-
-# SSL Configuration
-APP_DOMAIN=matre.example.com
-LETSENCRYPT_EMAIL=admin@example.com
-CERT_RESOLVER=letsencrypt
-
-# Database
-DB_DRIVER=pdo_mysql
+# DB credentials (used by docker compose to seed the matre_db container)
 DB_HOST=db
 DB_PORT=3306
 DB_NAME=matre
 DB_USER=matre
-DB_PASS=secure-password
-EOF
+DB_PASS=<strong-random-password>
+DB_ROOT_PASSWORD=<strong-random-password>
+
+# Public URLs — replace with your real domain
+APP_DOMAIN=<production-domain>
+ALLURE_PUBLIC_URL=https://<production-domain>/allure
+NOVNC_URL=https://<production-domain>/novnc
+
+# Let's Encrypt
+LETSENCRYPT_EMAIL=<ops-email-for-cert-renewal>
+CERT_RESOLVER=letsencrypt
+
+# Redis lock DSN (required for multiple workers — flock does NOT work)
+LOCK_DSN=redis://magento-redis:6379
+
+# Selenium
+SE_NODE_MAX_SESSIONS=4
+SE_VNC_NO_PASSWORD=false
+
+# Test module repository
+TEST_MODULE_REPO=git@github.com:your-org/your-mftf-tests.git
+TEST_MODULE_BRANCH=main
+
+# Magento Marketplace (for MFTF binary install)
+MAGENTO_PUBLIC_KEY=<your-key>
+MAGENTO_PRIVATE_KEY=<your-key>
+
+# Notifications (optional)
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
 ```
 
-2. **Validate configuration:**
+⚠️ **Never commit `.env`.** Back it up via secrets manager (1Password, AWS SSM, etc.) — see [Backup & Restore](../operations/backup-restore.md#secrets-env).
+
+### 3. SSH Key for Test Module Repository
+
+If your test module repo is private, mount an SSH key into the php container. See `docker/ssh/README.md` for details. Quick version:
 
 ```bash
-docker-compose exec php php bin/console app:validate-ssl-config
+mkdir -p ~/matre/docker/ssh
+ssh-keygen -t ed25519 -f ~/matre/docker/ssh/id_ed25519 -N ""
+# Add the public key to your test module repo's deploy keys
+cat ~/matre/docker/ssh/id_ed25519.pub
+# Restrict permissions
+chmod 600 ~/matre/docker/ssh/id_ed25519
 ```
 
-3. **Start with production profile:**
+### 4. Validate SSL Configuration
+
+Before bringing up Traefik, verify Let's Encrypt config:
 
 ```bash
-docker-compose --profile production up -d
+docker compose exec php php bin/console app:validate-ssl-config
 ```
 
-4. **Verify SSL:**
+(After first start — see below.)
+
+### 5. Initial Start
 
 ```bash
-curl -I https://matre.example.com
+./prod.sh start
 ```
 
-### How It Works
+This runs `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d` with the `production` profile (which activates the embedded Traefik for SSL termination), runs migrations, and warms cache.
 
-- **Profile activation:** `--profile production` starts the embedded Traefik
-- **HTTP-01 challenge:** Traefik automatically requests certs via Let's Encrypt
-- **Auto-renewal:** Certificates renewed before expiry
-- **HTTP redirect:** All HTTP traffic redirected to HTTPS
-- **Persistent storage:** Certificates stored in `traefik_certs` volume
+### 6. Create Admin User
 
-### Local Development
-
-Local development is unaffected. Without `--profile production`:
-- Embedded Traefik does not start
-- Uses external Traefik network (if available)
-- Works with self-signed certs for `*.local` domains
-
-### Troubleshooting
-
-**Certificate not issued:**
 ```bash
-# Check Traefik logs
-docker logs matre_traefik
-
-# Verify DNS
-dig +short matre.example.com
-
-# Test HTTP challenge path
-curl http://matre.example.com/.well-known/acme-challenge/test
+./prod.sh console app:create-admin
 ```
 
-**Rate limits:** Let's Encrypt has [rate limits](https://letsencrypt.org/docs/rate-limits/). For testing, use staging:
+Follow the interactive prompts.
+
+### 7. Verify
+
+```bash
+curl -I https://<production-domain>/admin
+# Expect: HTTP/2 302 → /login
+```
+
+---
+
+## Day-to-Day Deployment
+
+The `./prod.sh` script wraps the common operations. See [CLI Reference](../operations/cli-reference.md) for the full subcommand list.
+
+### Typical PHP-only deploy (most common)
+
+For PHP code changes, with or without migrations:
+
+```bash
+ssh <production-server> "cd ~/matre && git pull origin master && \
+  docker compose exec -T php php bin/console doctrine:migrations:migrate --no-interaction && \
+  docker compose exec -T php php bin/console cache:clear --env=prod && \
+  docker compose restart test-worker scheduler"
+```
+
+Code is volume-mounted in production, so `git pull` + cache clear + worker restart is sufficient. No image rebuild needed.
+
+### Frontend (Vue/JS/CSS) deploy
+
+Frontend assets are baked into the app image, then synced to the host's `public/build/`:
+
+```bash
+./prod.sh frontend
+# OR force a fresh build (use after package.json / vite.config.mjs / tailwind.config.js changes)
+./prod.sh frontend --no-cache
+```
+
+The script:
+1. Builds the `frontend_build` Docker stage
+2. Validates the manifest (checks `manifest.json` + Tailwind CSS size > 10 KB)
+3. Atomically swaps `public/build/` (with rollback to `public/build.old/`)
+4. Clears Symfony cache
+
+To roll back a bad frontend deploy:
+```bash
+./prod.sh frontend-rollback
+```
+
+### Composer dependency change
+
+Requires a full image rebuild:
+
+```bash
+./prod.sh update
+```
+
+### Docker / `docker-compose.yml` change
+
+Same — `./prod.sh update` does a `pull`, `up -d --force-recreate`, migrate, cache clear.
+
+---
+
+## Decision Table
+
+| Change Type | Command |
+|---|---|
+| PHP code only (no DB schema change) | `git pull` + `docker compose restart test-worker` |
+| PHP code + migration | `git pull` + migrate + restart workers |
+| Composer dependency | `./prod.sh update` |
+| Vue/JS/CSS only | `./prod.sh frontend` |
+| Docker / compose config | `./prod.sh update` |
+| Docker engine itself | See [Docker Engine](docker-engine.md#planned-engine-upgrade) |
+
+---
+
+## Operational Hardening
+
+After initial deployment, set up:
+
+1. **EBS / volume snapshots** — daily or weekly. See [Backup & Restore](../operations/backup-restore.md).
+2. **Disk monitoring + Slack alerts**:
+   ```bash
+   bash scripts/ops/install-host-ops-cron.sh
+   ```
+   Installs cron entries for disk monitoring, artifact retention, and safe Docker prune.
+3. **Journald cap** — prevent log files filling the disk:
+   ```bash
+   sudo tee /etc/systemd/journald.conf.d/matre-cap.conf <<'EOF'
+   [Journal]
+   SystemMaxUse=500M
+   SystemKeepFree=1G
+   EOF
+   sudo systemctl restart systemd-journald
+   ```
+4. **Daily artifact cleanup cron** at `/etc/cron.d/matre-cleanup` running `scripts/cleanup-cron.sh` (60-day retention).
+
+---
+
+## Verifying Production Health
+
+```bash
+# URL responds
+curl -sI -k https://<production-domain>/admin | head -1
+# Expect: HTTP/2 302
+
+# All containers up
+docker ps --format 'table {{.Names}}\t{{.Status}}'
+
+# Daemon healthy with standard data root
+docker info --format '{{.ServerVersion}} | {{.DockerRootDir}} | {{.Driver}}'
+# Expect: 29.x | /var/lib/docker | overlay2
+
+# Restart policies live on critical services
+docker inspect matre_php matre_db matre_traefik_prod \
+  --format '{{.Name}}: {{.HostConfig.RestartPolicy.Name}}'
+# Expect: all "unless-stopped"
+
+# Disk healthy
+df -h /
+docker system df
+```
+
+---
+
+## SSL with Let's Encrypt (built-in via Traefik)
+
+The `production` profile activates a Traefik reverse proxy with automatic Let's Encrypt SSL.
+
+### How it works
+
+- **Profile activation**: `--profile production` (which `./prod.sh start` passes)
+- **HTTP-01 challenge**: Traefik requests certs via Let's Encrypt
+- **Auto-renewal**: Traefik renews certs before expiry
+- **HTTP redirect**: All HTTP traffic redirected to HTTPS
+- **Persistent storage**: Certificates stored in the `traefik_certs` Docker volume
+
+### Prerequisites
+
+- Domain DNS A record points to the server's public IP
+- Ports 80 and 443 open in security group / firewall
+- No other service binding ports 80/443
+
+### Troubleshooting SSL
+
+```bash
+# Traefik logs
+docker logs matre_traefik_prod
+
+# DNS resolution
+dig +short <production-domain>
+
+# HTTP challenge endpoint
+curl http://<production-domain>/.well-known/acme-challenge/test
+```
+
+If you hit Let's Encrypt rate limits during testing, point Traefik at the staging CA in `docker/traefik/traefik.yml`:
+
 ```yaml
-# In docker/traefik/traefik.yml, add under acme:
-caServer: https://acme-staging-v02.api.letsencrypt.org/directory
+acme:
+  caServer: https://acme-staging-v02.api.letsencrypt.org/directory
 ```
 
 ---
 
-## Monitoring
+## See Also
 
-### Application Logs
-```bash
-tail -f var/log/prod.log
-```
-
-### Nginx Logs
-```bash
-tail -f /var/log/nginx/matre_error.log
-```
-
-### PHP-FPM Status
-```bash
-sudo systemctl status php8.3-fpm
-```
-
----
-
-## Performance
-
-### PHP OPcache
-
-Enable in `php.ini`:
-```ini
-opcache.enable=1
-opcache.memory_consumption=256
-opcache.max_accelerated_files=20000
-opcache.validate_timestamps=0
-```
-
-### Symfony Cache
-
-Warm up cache:
-```bash
-php bin/console cache:warmup --env=prod
-```
-
----
-
-## Backup
-
-### Database
-```bash
-mysqldump -u user -p matre > backup_$(date +%Y%m%d).sql
-```
-
-### Files
-```bash
-tar -czf uploads_$(date +%Y%m%d).tar.gz public/uploads/
-```
-
----
-
-## Checklist
-
-Before deploying:
-
-1. [ ] Environment variables configured
-2. [ ] Database created and migrations run
-3. [ ] Assets built (`npm run build`)
-4. [ ] Cache cleared and warmed
-5. [ ] Permissions set correctly
-6. [ ] SSL certificate installed
-7. [ ] Backup strategy in place
-
----
-
-## Troubleshooting
-
-### Snap Docker (Ubuntu)
-
-If Docker was installed via Ubuntu Snap, the `/opt` directory is read-only:
-
-```bash
-mkdir /opt/matre: read-only file system
-```
-
-**Solution:** Deploy to `/home/$USER/matre` instead of `/opt/matre`.
-
-```bash
-# Check if Docker is Snap-installed
-snap list docker
-
-# If yes, use home directory
-mkdir -p ~/matre
-cd ~/matre
-git clone https://github.com/good-yellow-bee/matre.git .
-```
-
-### Symfony Runtime Missing
-
-If you see errors like `vendor/autoload_runtime.php not found`:
-
-```bash
-# Regenerate autoloader (runs Composer plugins)
-docker-compose exec php composer dump-autoload --optimize
-
-# Clear and warm cache
-docker-compose exec php php bin/console cache:clear --env=prod
-docker-compose exec php php bin/console cache:warmup --env=prod
-```
-
-### Cache Permission Errors
-
-If you see `Permission denied` for `var/cache` or `var/log`:
-
-```bash
-# Fix ownership (inside container)
-docker-compose exec php chown -R www-data:www-data var
-
-# Or from host
-docker-compose exec -u root php chown -R www-data:www-data var
-docker-compose exec -u root php chmod -R 775 var
-
-# Warm cache as www-data
-docker-compose exec -u www-data php php bin/console cache:warmup --env=prod
-```
-
-### Traefik 504 Gateway Timeout
-
-If Traefik can't reach the application:
-
-```bash
-# Check nginx is on same network as Traefik
-docker network inspect matre_matre_network | grep matre_nginx
-
-# If missing, connect manually
-docker network connect matre_matre_network matre_traefik_prod
-
-# Check nginx is running
-docker-compose logs nginx
-```
-
-### Database Connection Refused
-
-```bash
-# Wait for DB to be healthy
-docker-compose ps db
-
-# Check DB logs
-docker-compose logs db
-
-# Test connection
-docker-compose exec php php bin/console dbal:run-sql "SELECT 1"
-```
-
-### Post-Deployment Commands
-
-After starting containers, always run:
-
-```bash
-# Run migrations
-docker-compose exec php php bin/console doctrine:migrations:migrate --no-interaction
-
-# Create admin user (first deploy only)
-docker-compose exec php php bin/console app:create-admin
-
-# Warm cache
-docker-compose exec php php bin/console cache:warmup --env=prod
-```
+- [Docker Engine](docker-engine.md) — engine choice, holds, restart policies, snap migration
+- [Disaster Recovery](../operations/disaster-recovery.md) — incident playbook
+- [Backup & Restore](../operations/backup-restore.md) — backup procedures and restoration
+- [CLI Reference](../operations/cli-reference.md) — all available commands
+- [Troubleshooting](../operations/troubleshooting.md) — common issues

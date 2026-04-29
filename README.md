@@ -50,11 +50,13 @@ See [Notifications Guide](docs/operations/notifications.md) for configuration.
 # Clone and start
 git clone https://github.com/good-yellow-bee/matre.git
 cd matre
-docker-compose up -d --build
+./local.sh start
+```
 
-# Wait for containers, then setup database
-docker-compose exec php php bin/console doctrine:migrations:migrate --no-interaction
-docker-compose exec php php bin/console doctrine:fixtures:load --no-interaction
+`./local.sh start` runs `docker compose up -d` and applies migrations. To create an admin user:
+
+```bash
+./local.sh console app:create-admin
 ```
 
 **Access Points:**
@@ -65,7 +67,7 @@ docker-compose exec php php bin/console doctrine:fixtures:load --no-interaction
 | Selenium Grid | http://localhost:4444 |
 | Mailpit UI | http://localhost:8031 |
 
-**Default credentials:** `admin` / `admin123`
+**Default credentials:** set during `app:create-admin` (no built-in defaults).
 
 ## Architecture
 
@@ -216,7 +218,7 @@ Each environment can have custom variables stored in the database:
 
 ```bash
 # Start services
-docker-compose up -d
+./local.sh start
 
 # Frontend development (HMR)
 npm run dev
@@ -225,16 +227,17 @@ npm run dev
 npm run build
 
 # Run PHPUnit tests
-docker-compose exec php vendor/bin/phpunit
+./local.sh test
 
 # Run Playwright E2E tests
 npm run test:e2e
 
 # Code quality
-docker-compose exec php vendor/bin/phpstan analyse
+./local.sh phpstan
+./local.sh fix
 
 # View worker logs
-docker-compose logs -f matre_test_worker
+./local.sh logs test-worker
 ```
 
 See [tests/README.md](tests/README.md) for full testing documentation.
@@ -260,30 +263,31 @@ See [tests/README.md](tests/README.md) for full testing documentation.
 - [Configuration](docs/getting-started/configuration.md)
 
 ### Operations
-- [Running Tests](docs/operations/test-execution.md) - Execute MFTF/Playwright tests
-- [Allure Reports](docs/operations/allure-reports.md) - View and manage reports
-- [Monitoring](docs/operations/monitoring.md) - Health checks and diagnostics
-- [Scheduling](docs/operations/scheduling.md) - Automate test runs
-- [CLI Reference](docs/operations/cli-reference.md) - All commands
-- [API Reference](docs/operations/api-reference.md) - REST API
-- [Troubleshooting](docs/operations/troubleshooting.md) - Common issues
+- [Running Tests](docs/operations/test-execution.md) — Execute MFTF/Playwright tests
+- [Allure Reports](docs/operations/allure-reports.md) — View and manage reports
+- [Monitoring](docs/operations/monitoring.md) — Health checks and diagnostics
+- [Scheduling](docs/operations/scheduling.md) — Automate test runs
+- [CLI Reference](docs/operations/cli-reference.md) — All commands
+- [API Reference](docs/operations/api-reference.md) — REST API
+- [Disaster Recovery](docs/operations/disaster-recovery.md) — Incident playbook
+- [Backup & Restore](docs/operations/backup-restore.md) — Backup procedures
+- [Troubleshooting](docs/operations/troubleshooting.md) — Common issues
 
 ### Development
 - [Architecture Overview](docs/development/architecture.md)
 - [Entities](docs/development/entities.md)
 - [Admin CRUD](docs/development/admin-crud.md)
-- [Forms](docs/development/forms.md) - Form handling patterns
-- [Vue Islands](docs/development/vue-islands.md) - Vue 3 component pattern
-- [Dev Mode](docs/development/dev-mode.md) - Local module development
-- [Unit Tests](docs/testing/unit-tests.md) - PHPUnit testing
+- [Forms](docs/development/forms.md) — Form handling patterns
+- [Vue Islands](docs/development/vue-islands.md) — Vue 3 component pattern
+- [Dev Mode](docs/development/dev-mode.md) — Local module development
+- [Unit Tests](docs/testing/unit-tests.md) — PHPUnit testing
 
 ### Deployment
 - [Production Deployment](docs/deployment/production.md)
+- [Docker Engine](docs/deployment/docker-engine.md) — Engine choice, holds, restart policies
 - [CI/CD](docs/deployment/ci-cd.md)
 - [Security](docs/security.md)
 
 ## License
 
-MIT License - Copyright (c) 2025
-
-See [LICENSE](LICENSE) for details.
+MIT License — see [LICENSE](LICENSE) for details.

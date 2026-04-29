@@ -9,7 +9,7 @@ System diagnostics and health monitoring.
 Run before test execution to verify system readiness:
 
 ```bash
-docker-compose exec php php bin/console app:test:check-magento
+docker compose exec php php bin/console app:test:check-magento
 ```
 
 ### Checks Performed
@@ -112,7 +112,7 @@ Quick health verification for each service:
 | **Selenium** | `curl http://localhost:4444/status` | JSON with `"ready": true` |
 | **Allure** | `curl http://localhost:5050/allure-docker-service/version` | Version string |
 | **Mailpit** | `curl http://localhost:8031` | HTTP 200 |
-| **Database** | `docker-compose exec db mysqladmin ping -umatre -pmatre` | `mysqld is alive` |
+| **Database** | `docker compose exec db mysqladmin ping -umatre -pmatre` | `mysqld is alive` |
 
 ### Selenium Grid Details
 
@@ -130,30 +130,30 @@ Shows grid ready state and available browser nodes.
 
 Test execution logs:
 ```bash
-docker-compose logs -f matre_test_worker
+docker compose logs -f matre_test_worker
 ```
 
 ### Scheduler
 
 Cron job execution logs:
 ```bash
-docker-compose logs -f matre_scheduler
+docker compose logs -f matre_scheduler
 ```
 
 ### All Services
 
 ```bash
-docker-compose logs -f
+docker compose logs -f
 ```
 
 ### Specific Container
 
 ```bash
 # Last 100 lines
-docker-compose logs --tail=100 matre_php
+docker compose logs --tail=100 matre_php
 
 # Follow with timestamps
-docker-compose logs -f -t matre_php
+docker compose logs -f -t matre_php
 ```
 
 ---
@@ -163,7 +163,7 @@ docker-compose logs -f -t matre_php
 ### Check Pending Messages
 
 ```bash
-docker-compose exec db mysql -umatre -pmatre -e \
+docker compose exec db mysql -umatre -pmatre -e \
   "SELECT queue_name, COUNT(*) as pending FROM matre.messenger_messages GROUP BY queue_name;"
 ```
 
@@ -175,7 +175,7 @@ Expected queues:
 ### Check Failed Messages
 
 ```bash
-docker-compose exec db mysql -umatre -pmatre -e \
+docker compose exec db mysql -umatre -pmatre -e \
   "SELECT id, queue_name, created_at FROM matre.messenger_messages WHERE queue_name = 'failed' ORDER BY created_at DESC LIMIT 10;"
 ```
 
@@ -183,15 +183,15 @@ docker-compose exec db mysql -umatre -pmatre -e \
 
 Failed messages can be retried via Symfony console:
 ```bash
-docker-compose exec php php bin/console messenger:failed:show
-docker-compose exec php php bin/console messenger:failed:retry {id}
+docker compose exec php php bin/console messenger:failed:show
+docker compose exec php php bin/console messenger:failed:retry {id}
 ```
 
 ---
 
 ## Host Disk Monitoring {#host-disk}
 
-For ABB production, use the host ops scripts under `scripts/ops`:
+For production deployments, use the host ops scripts under `scripts/ops`:
 
 ```bash
 # Install host cron entries (idempotent)
@@ -201,7 +201,7 @@ bash scripts/ops/install-host-ops-cron.sh
 bash scripts/ops/remove-host-ops-cron.sh
 ```
 
-Installed jobs (host cron timezone, UTC on ABB):
+Installed jobs (host cron timezone — typically UTC on cloud-hosted Linux):
 - Every 10 minutes: disk monitor and Slack alert transitions
 - Daily 02:25: artifact retention cleanup (`app:test:cleanup --days=14`)
 - Sunday 03:40: safe Docker prune (no volume prune)
@@ -245,13 +245,13 @@ docker system df
 ### Quick Status
 
 ```bash
-docker-compose ps
+docker compose ps
 ```
 
 ### Detailed Status
 
 ```bash
-docker-compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
+docker compose ps --format "table {{.Name}}\t{{.Status}}\t{{.Ports}}"
 ```
 
 ### Resource Usage

@@ -23,7 +23,7 @@ Guide for creating and running Playwright tests with MATRE.
 
 | Requirement | Check |
 |-------------|-------|
-| MATRE running | `docker-compose ps` shows `matre_playwright` running |
+| MATRE running | `docker compose ps` shows `matre_playwright` running |
 | Node.js (for local dev) | `node --version` (18+) |
 | Test module repository | Git repo with your tests |
 
@@ -353,14 +353,14 @@ TEST_MODULE_BRANCH=main
 
 ```bash
 # Run all Playwright tests
-docker-compose exec php php bin/console app:test:run playwright dev-us --sync
+docker compose exec php php bin/console app:test:run playwright dev-us --sync
 
 # Run specific test file
-docker-compose exec php php bin/console app:test:run playwright dev-us \
+docker compose exec php php bin/console app:test:run playwright dev-us \
     --filter="homepage" --sync
 
 # Run tests with tag
-docker-compose exec php php bin/console app:test:run playwright dev-us \
+docker compose exec php php bin/console app:test:run playwright dev-us \
     --filter="@smoke" --sync
 ```
 
@@ -425,7 +425,7 @@ Run by tag:
 
 ```bash
 # MATRE
-docker-compose exec php php bin/console app:test:run playwright dev-us \
+docker compose exec php php bin/console app:test:run playwright dev-us \
     --filter="@smoke" --sync
 
 # Local
