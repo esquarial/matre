@@ -292,6 +292,7 @@ See [tests/README.md](tests/README.md) for full testing documentation.
 - [Disaster Recovery](docs/operations/disaster-recovery.md) — Incident playbook
 - [Backup & Restore](docs/operations/backup-restore.md) — Backup procedures
 - [Troubleshooting](docs/operations/troubleshooting.md) — Common issues
+- [Selenium + Allure Updates](docs/operations/selenium-allure-updates.md) — Monthly dependency bump runbook
 
 ### Development
 - [Architecture Overview](docs/development/architecture.md)
