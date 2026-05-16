@@ -110,10 +110,12 @@ class TestRunController extends AbstractController
         }
 
         $artifacts = $this->artifactCollector->listArtifacts($run);
+        $artifactDisplay = $this->artifactCollector->groupArtifactsForDisplay($artifacts);
 
         return $this->render('admin/test_run/show.html.twig', [
             'run' => $run,
             'artifacts' => $artifacts,
+            'artifactDisplay' => $artifactDisplay,
             'vnc_url' => $this->noVncUrl,
             'allure_public_url' => $this->allurePublicUrl,
         ]);

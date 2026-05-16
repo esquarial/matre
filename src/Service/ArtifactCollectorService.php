@@ -400,6 +400,47 @@ class ArtifactCollectorService
     }
 
     /**
+     * Pair same-basename HTML failure pages with screenshots for display.
+     *
+     * @param array{screenshots: string[], html: string[], other?: string[]} $artifacts
+     *
+     * @return array{screenshots: array<int, array{screenshot: string, html: string|null}>, html: string[]}
+     */
+    public function groupArtifactsForDisplay(array $artifacts): array
+    {
+        $htmlByBaseName = [];
+        foreach ($artifacts['html'] as $html) {
+            $htmlByBaseName[strtolower(pathinfo($html, PATHINFO_FILENAME))] = $html;
+        }
+
+        $pairedHtml = [];
+        $screenshots = [];
+        foreach ($artifacts['screenshots'] as $screenshot) {
+            $baseName = strtolower(pathinfo($screenshot, PATHINFO_FILENAME));
+            $html = $htmlByBaseName[$baseName] ?? null;
+
+            if (null !== $html) {
+                $pairedHtml[$html] = true;
+            }
+
+            $screenshots[] = [
+                'screenshot' => $screenshot,
+                'html' => $html,
+            ];
+        }
+
+        $unpairedHtml = array_values(array_filter(
+            $artifacts['html'],
+            static fn (string $html): bool => !isset($pairedHtml[$html]),
+        ));
+
+        return [
+            'screenshots' => $screenshots,
+            'html' => $unpairedHtml,
+        ];
+    }
+
+    /**
      * Clean up artifacts older than specified days.
      */
     public function cleanupOldArtifacts(int $daysOld = 30): int

@@ -245,10 +245,11 @@
             </div>
             <div class="card-body">
                 {# Screenshots Gallery #}
-                {% if artifacts.screenshots|length > 0 %}
-                <h6 class="mb-3">Screenshots ({{ artifacts.screenshots|length }})</h6>
+                {% if artifactDisplay.screenshots|length > 0 %}
+                <h6 class="mb-3">Screenshots ({{ artifactDisplay.screenshots|length }})</h6>
                 <div class="row g-2 mb-4">
-                    {% for screenshot in artifacts.screenshots %}
+                    {% for artifact in artifactDisplay.screenshots %}
+                    {% set screenshot = artifact.screenshot %}
                     <div class="col-6 col-md-4 col-lg-3">
                         <a href="{{ path('admin_test_run_artifact', {id: run.id, filename: screenshot}) }}"
                            data-screenshot
@@ -262,16 +263,23 @@
                         <small class="d-block text-truncate text-muted mt-1" title="{{ screenshot }}">
                             {{ screenshot }}
                         </small>
+                        {% if artifact.html %}
+                        <a href="{{ path('admin_test_run_artifact', {id: run.id, filename: artifact.html}) }}"
+                           target="_blank" rel="noopener"
+                           class="small d-inline-flex align-items-center mt-1">
+                            <i class="bi bi-file-earmark-code me-1"></i>HTML report
+                        </a>
+                        {% endif %}
                     </div>
                     {% endfor %}
                 </div>
                 {% endif %}
 
                 {# HTML Reports #}
-                {% if artifacts.html|length > 0 %}
-                <h6 class="mb-3">HTML Reports ({{ artifacts.html|length }})</h6>
+                {% if artifactDisplay.html|length > 0 %}
+                <h6 class="mb-3">HTML Reports ({{ artifactDisplay.html|length }})</h6>
                 <div class="list-group">
-                    {% for html in artifacts.html %}
+                    {% for html in artifactDisplay.html %}
                     <a href="{{ path('admin_test_run_artifact', {id: run.id, filename: html}) }}"
                        target="_blank" rel="noopener"
                        class="list-group-item list-group-item-action d-flex align-items-center">
