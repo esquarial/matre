@@ -48,9 +48,9 @@ class ArtifactCollectorService
             $rootPath = $this->projectDir . '/' . $this->mftfResultsDir;
             $targetPath = $this->getRunArtifactsPath($run);
 
-            // Prefer per-run directory, but fallback to root if not found
-            // (move command may not have run if test crashed/cancelled)
-            $sourcePath = is_dir($perRunPath) ? $perRunPath : $rootPath;
+            // Prefer per-run directory, but fallback to root if it is missing or empty.
+            // The run directory can be created even when the post-run move misses files.
+            $sourcePath = $this->resolveArtifactSourcePath($perRunPath, $rootPath);
 
             if (!is_dir($sourcePath)) {
                 $this->logger->warning('MFTF results directory not found', ['path' => $sourcePath]);
@@ -138,8 +138,8 @@ class ArtifactCollectorService
         $rootPath = $this->projectDir . '/' . $this->mftfResultsDir;
         $targetPath = $this->getRunArtifactsPath($run);
 
-        // Prefer per-run directory, fallback to root
-        $sourcePath = is_dir($perRunPath) ? $perRunPath : $rootPath;
+        // Prefer per-run directory, fallback to root when the run directory is empty.
+        $sourcePath = $this->resolveArtifactSourcePath($perRunPath, $rootPath);
 
         if (!is_dir($sourcePath)) {
             return;
@@ -528,5 +528,30 @@ class ArtifactCollectorService
         }
 
         return $collected;
+    }
+
+    private function resolveArtifactSourcePath(string $perRunPath, string $rootPath): string
+    {
+        if (is_dir($perRunPath) && $this->hasCollectableArtifacts($perRunPath)) {
+            return $perRunPath;
+        }
+
+        return $rootPath;
+    }
+
+    private function hasCollectableArtifacts(string $path): bool
+    {
+        if (!is_dir($path)) {
+            return false;
+        }
+
+        $finder = new Finder();
+        $finder->files()->in($path)->depth(0);
+
+        $extensions = array_merge(self::SCREENSHOT_EXTENSIONS, self::HTML_EXTENSIONS);
+        $patterns = array_map(static fn (string $ext): string => '*.' . $ext, $extensions);
+        $finder->name($patterns);
+
+        return $finder->hasResults();
     }
 }
