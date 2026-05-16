@@ -48,40 +48,48 @@ class ArtifactCollectorService
             $rootPath = $this->projectDir . '/' . $this->mftfResultsDir;
             $targetPath = $this->getRunArtifactsPath($run);
 
-            // Prefer per-run directory, but fallback to root if it is missing or empty.
-            // The run directory can be created even when the post-run move misses files.
-            $sourcePath = $this->resolveArtifactSourcePath($perRunPath, $rootPath);
+            $sourcePaths = $this->resolveArtifactSourcePaths($perRunPath, $rootPath, $run);
 
-            if (!is_dir($sourcePath)) {
-                $this->logger->warning('MFTF results directory not found', ['path' => $sourcePath]);
+            if (empty($sourcePaths)) {
+                $this->logger->warning('MFTF results directories contain no current artifacts', [
+                    'paths' => [$perRunPath, $rootPath],
+                ]);
 
                 return $collected;
             }
 
-            // Log which source we're using
             $this->logger->debug('Collecting artifacts', [
                 'runId' => $run->getId(),
-                'source' => $sourcePath === $perRunPath ? 'per-run' : 'root',
+                'sources' => $sourcePaths,
             ]);
 
             $filesystem = new Filesystem();
             $filesystem->mkdir($targetPath);
+            $this->clearCollectedArtifactFiles($targetPath, $filesystem);
 
-            // Collect screenshots
-            $collected['screenshots'] = $this->collectFilesByExtension(
-                $sourcePath,
-                $targetPath,
-                self::SCREENSHOT_EXTENSIONS,
-                $filesystem,
-            );
+            foreach ($sourcePaths as $sourcePath) {
+                $collected['screenshots'] = array_values(array_unique(array_merge(
+                    $collected['screenshots'],
+                    $this->collectFilesByExtension(
+                        $sourcePath,
+                        $targetPath,
+                        self::SCREENSHOT_EXTENSIONS,
+                        $filesystem,
+                        $run,
+                    ),
+                )));
 
-            // Collect HTML files
-            $collected['html'] = $this->collectFilesByExtension(
-                $sourcePath,
-                $targetPath,
-                self::HTML_EXTENSIONS,
-                $filesystem,
-            );
+                $collected['html'] = array_values(array_unique(array_merge(
+                    $collected['html'],
+                    $this->collectFilesByExtension(
+                        $sourcePath,
+                        $targetPath,
+                        self::HTML_EXTENSIONS,
+                        $filesystem,
+                        $run,
+                    ),
+                )));
+            }
 
             $this->logger->info('Artifacts collected', [
                 'run_id' => $run->getId(),
@@ -138,10 +146,9 @@ class ArtifactCollectorService
         $rootPath = $this->projectDir . '/' . $this->mftfResultsDir;
         $targetPath = $this->getRunArtifactsPath($run);
 
-        // Prefer per-run directory, fallback to root when the run directory is empty.
-        $sourcePath = $this->resolveArtifactSourcePath($perRunPath, $rootPath);
+        $sourcePaths = $this->resolveArtifactSourcePaths($perRunPath, $rootPath, $run);
 
-        if (!is_dir($sourcePath)) {
+        if (empty($sourcePaths)) {
             return;
         }
 
@@ -163,19 +170,23 @@ class ArtifactCollectorService
         $allExtensions = array_merge(self::SCREENSHOT_EXTENSIONS, self::HTML_EXTENSIONS);
         $screenshotCollected = false;
 
-        $finder = new Finder();
-        $finder->files()->in($sourcePath)->depth(0);
+        foreach ($sourcePaths as $sourcePath) {
+            $finder = new Finder();
+            $finder->files()->in($sourcePath)->depth(0);
 
-        // Build pattern for all extensions
-        $patterns = array_map(fn ($ext) => '*.' . $ext, $allExtensions);
-        $finder->name($patterns);
+            // Build pattern for all extensions
+            $patterns = array_map(fn ($ext) => '*.' . $ext, $allExtensions);
+            $finder->name($patterns);
 
-        foreach ($finder as $file) {
-            $filename = $file->getFilename();
+            foreach ($finder as $file) {
+                $filename = $file->getFilename();
 
-            // Match by test ID or test name with word boundaries
-            if ($this->filenameMatchesTest($filename, $testId, $testName)) {
-                if ($file->getSize() > self::MAX_ARTIFACT_SIZE) {
+                // Match by test ID or test name with word boundaries
+                if (!$this->filenameMatchesTest($filename, $testId, $testName)) {
+                    continue;
+                }
+
+                if (!$this->isArtifactFromRun($file, $run) || $file->getSize() > self::MAX_ARTIFACT_SIZE) {
                     continue;
                 }
 
@@ -534,6 +545,7 @@ class ArtifactCollectorService
         string $targetPath,
         array $extensions,
         Filesystem $filesystem,
+        TestRun $run,
     ): array {
         $collected = [];
 
@@ -545,6 +557,10 @@ class ArtifactCollectorService
         }
 
         foreach ($finder as $file) {
+            if (!$this->isArtifactFromRun($file, $run)) {
+                continue;
+            }
+
             if ($file->getSize() > self::MAX_ARTIFACT_SIZE) {
                 $this->logger->warning('Artifact too large, skipping', [
                     'file' => $file->getFilename(),
@@ -571,16 +587,43 @@ class ArtifactCollectorService
         return $collected;
     }
 
-    private function resolveArtifactSourcePath(string $perRunPath, string $rootPath): string
+    private function clearCollectedArtifactFiles(string $targetPath, Filesystem $filesystem): void
     {
-        if (is_dir($perRunPath) && $this->hasCollectableArtifacts($perRunPath)) {
-            return $perRunPath;
+        if (!is_dir($targetPath)) {
+            return;
         }
 
-        return $rootPath;
+        $finder = new Finder();
+        $finder->files()->in($targetPath)->depth(0);
+
+        $extensions = array_merge(self::SCREENSHOT_EXTENSIONS, self::HTML_EXTENSIONS);
+        $patterns = array_map(static fn (string $ext): string => '*.' . $ext, $extensions);
+        $finder->name($patterns);
+
+        foreach ($finder as $file) {
+            $realPath = $file->getRealPath();
+            if (false !== $realPath) {
+                $filesystem->remove($realPath);
+            }
+        }
     }
 
-    private function hasCollectableArtifacts(string $path): bool
+    /**
+     * @return string[]
+     */
+    private function resolveArtifactSourcePaths(string $perRunPath, string $rootPath, TestRun $run): array
+    {
+        $paths = [];
+        foreach ([$perRunPath, $rootPath] as $path) {
+            if (is_dir($path) && $this->hasCollectableArtifacts($path, $run)) {
+                $paths[] = $path;
+            }
+        }
+
+        return array_values(array_unique($paths));
+    }
+
+    private function hasCollectableArtifacts(string $path, TestRun $run): bool
     {
         if (!is_dir($path)) {
             return false;
@@ -593,6 +636,20 @@ class ArtifactCollectorService
         $patterns = array_map(static fn (string $ext): string => '*.' . $ext, $extensions);
         $finder->name($patterns);
 
-        return $finder->hasResults();
+        foreach ($finder as $file) {
+            if ($this->isArtifactFromRun($file, $run)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function isArtifactFromRun(\SplFileInfo $file, TestRun $run): bool
+    {
+        $startedAt = $run->getStartedAt() ?? $run->getCreatedAt();
+        $earliestArtifactTime = $startedAt->getTimestamp() - 60;
+
+        return $file->getMTime() >= $earliestArtifactTime;
     }
 }
