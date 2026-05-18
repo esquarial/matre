@@ -130,6 +130,34 @@ class ArtifactCollectorServiceTest extends TestCase
         $this->assertSame([], $artifacts['other']);
     }
 
+    public function testGroupArtifactsForDisplayPairsHtmlByBaseName(): void
+    {
+        $service = $this->createService();
+
+        $grouped = $service->groupArtifactsForDisplay([
+            'screenshots' => [
+                'Magento.AcceptanceTest._default.Backend.MOEC13447Cest.MOEC13447.fail.png',
+                'MOEC2609-fail.jpg',
+            ],
+            'html' => [
+                'Magento.AcceptanceTest._default.Backend.MOEC13447Cest.MOEC13447.fail.html',
+                'unpaired-report.html',
+            ],
+        ]);
+
+        $this->assertSame([
+            [
+                'screenshot' => 'Magento.AcceptanceTest._default.Backend.MOEC13447Cest.MOEC13447.fail.png',
+                'html' => 'Magento.AcceptanceTest._default.Backend.MOEC13447Cest.MOEC13447.fail.html',
+            ],
+            [
+                'screenshot' => 'MOEC2609-fail.jpg',
+                'html' => null,
+            ],
+        ], $grouped['screenshots']);
+        $this->assertSame(['unpaired-report.html'], $grouped['html']);
+    }
+
     public function testAssociateScreenshotsMatchesByTestIdWithWordBoundary(): void
     {
         $service = $this->createService();

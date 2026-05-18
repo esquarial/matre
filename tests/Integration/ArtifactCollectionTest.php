@@ -83,6 +83,52 @@ class ArtifactCollectionTest extends KernelTestCase
         $this->assertContains('test_screenshot.jpg', $collected['screenshots']);
     }
 
+    public function testCollectArtifactsFallsBackToRootWhenPerRunDirectoryIsEmpty(): void
+    {
+        $run = $this->createTestRun();
+        $service = $this->buildService();
+
+        $rootPath = $this->tempDir . '/var/mftf-results';
+        $perRunPath = $rootPath . '/run-' . $run->getId();
+        $this->filesystem->mkdir($perRunPath);
+        file_put_contents($rootPath . '/MOEC13447-fail.png', 'fake-png');
+
+        $collected = $service->collectArtifacts($run);
+
+        $this->assertContains('MOEC13447-fail.png', $collected['screenshots']);
+        $this->assertFileExists($service->getRunArtifactsPath($run) . '/MOEC13447-fail.png');
+    }
+
+    public function testCollectArtifactsIgnoresStalePerRunFilesAndCollectsCurrentRootFiles(): void
+    {
+        $run = $this->createTestRun();
+        $run->setStartedAt(new \DateTimeImmutable());
+        $service = $this->buildService();
+
+        $rootPath = $this->tempDir . '/var/mftf-results';
+        $perRunPath = $rootPath . '/run-' . $run->getId();
+        $this->filesystem->mkdir($perRunPath);
+
+        $staleFile = $perRunPath . '/MOEC11676-fail.png';
+        file_put_contents($staleFile, 'stale-png');
+        touch($staleFile, strtotime('-2 days'));
+
+        $targetPath = $service->getRunArtifactsPath($run);
+        $this->filesystem->mkdir($targetPath);
+        file_put_contents($targetPath . '/MOEC2609-stale.png', 'target-stale-png');
+
+        file_put_contents($rootPath . '/MOEC13447-fail.png', 'current-png');
+        file_put_contents($rootPath . '/MOEC13447-fail.html', '<html></html>');
+
+        $collected = $service->collectArtifacts($run);
+
+        $this->assertSame(['MOEC13447-fail.png'], $collected['screenshots']);
+        $this->assertSame(['MOEC13447-fail.html'], $collected['html']);
+        $this->assertFileExists($targetPath . '/MOEC13447-fail.png');
+        $this->assertFileDoesNotExist($targetPath . '/MOEC11676-fail.png');
+        $this->assertFileDoesNotExist($targetPath . '/MOEC2609-stale.png');
+    }
+
     public function testCollectArtifactsReturnsEmptyWhenNoDirectory(): void
     {
         $run = $this->createTestRun();
@@ -205,6 +251,58 @@ class ArtifactCollectionTest extends KernelTestCase
         $this->assertFileExists($targetPath . '/MOEC2609-page.html');
         $this->assertFileDoesNotExist($targetPath . '/MOEC2610-other.png');
         $this->assertSame('MOEC2609-fail.png', $result->getScreenshotPath());
+    }
+
+    public function testCollectTestScreenshotFallsBackToRootWhenPerRunDirectoryIsEmpty(): void
+    {
+        $run = $this->createTestRun();
+        $service = $this->buildService();
+
+        $rootPath = $this->tempDir . '/var/mftf-results';
+        $perRunPath = $rootPath . '/run-' . $run->getId();
+        $this->filesystem->mkdir($perRunPath);
+        file_put_contents($rootPath . '/Magento.AcceptanceTest._default.Backend.MOEC13447Cest.MOEC13447.fail.png', 'fake-png');
+
+        $result = new TestResult();
+        $result->setTestRun($run);
+        $result->setTestName('MOEC13447Cest:Moec13447');
+        $result->setTestId('MOEC13447');
+        $result->setStatus(TestResult::STATUS_FAILED);
+
+        $service->collectTestScreenshot($run, $result);
+
+        $targetPath = $service->getRunArtifactsPath($run);
+        $this->assertFileExists($targetPath . '/Magento.AcceptanceTest._default.Backend.MOEC13447Cest.MOEC13447.fail.png');
+        $this->assertSame('Magento.AcceptanceTest._default.Backend.MOEC13447Cest.MOEC13447.fail.png', $result->getScreenshotPath());
+    }
+
+    public function testCollectTestScreenshotIgnoresStalePerRunFilesAndUsesCurrentRootMatch(): void
+    {
+        $run = $this->createTestRun();
+        $run->setStartedAt(new \DateTimeImmutable());
+        $service = $this->buildService();
+
+        $rootPath = $this->tempDir . '/var/mftf-results';
+        $perRunPath = $rootPath . '/run-' . $run->getId();
+        $this->filesystem->mkdir($perRunPath);
+
+        $staleFile = $perRunPath . '/Magento.AcceptanceTest._default.Backend.MOEC11676Cest.MOEC11676.fail.png';
+        file_put_contents($staleFile, 'stale-png');
+        touch($staleFile, strtotime('-2 days'));
+        file_put_contents($rootPath . '/Magento.AcceptanceTest._default.Backend.MOEC13447Cest.MOEC13447.fail.png', 'current-png');
+
+        $result = new TestResult();
+        $result->setTestRun($run);
+        $result->setTestName('MOEC13447Cest:Moec13447');
+        $result->setTestId('MOEC13447');
+        $result->setStatus(TestResult::STATUS_BROKEN);
+
+        $service->collectTestScreenshot($run, $result);
+
+        $targetPath = $service->getRunArtifactsPath($run);
+        $this->assertFileExists($targetPath . '/Magento.AcceptanceTest._default.Backend.MOEC13447Cest.MOEC13447.fail.png');
+        $this->assertFileDoesNotExist($targetPath . '/Magento.AcceptanceTest._default.Backend.MOEC11676Cest.MOEC11676.fail.png');
+        $this->assertSame('Magento.AcceptanceTest._default.Backend.MOEC13447Cest.MOEC13447.fail.png', $result->getScreenshotPath());
     }
 
     // =====================
