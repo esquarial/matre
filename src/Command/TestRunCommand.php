@@ -6,6 +6,7 @@ namespace App\Command;
 
 use App\Entity\TestRun;
 use App\Message\TestRunMessage;
+use App\Repository\SettingsRepository;
 use App\Repository\TestEnvironmentRepository;
 use App\Repository\TestSuiteRepository;
 use App\Service\TestRunnerService;
@@ -27,6 +28,7 @@ class TestRunCommand extends Command
     public function __construct(
         private readonly TestEnvironmentRepository $environmentRepository,
         private readonly TestSuiteRepository $suiteRepository,
+        private readonly SettingsRepository $settingsRepository,
         private readonly TestRunnerService $testRunnerService,
         private readonly MessageBusInterface $messageBus,
     ) {
@@ -144,9 +146,20 @@ class TestRunCommand extends Command
 
                 $this->testRunnerService->executeRun($run);
                 $io->newLine();
-                $io->info('Tests completed, generating reports...');
 
-                $this->testRunnerService->generateReports($run);
+                // Skip report for individual runs when setting is disabled
+                $skipReport = null === $suite
+                    && !$this->settingsRepository->getSettings()->isAutoReportForIndividualRuns();
+
+                if ($skipReport) {
+                    $io->info('Skipping report generation (disabled for individual runs).');
+                    if (TestRun::STATUS_FAILED !== $run->getStatus()) {
+                        $run->markCompleted();
+                    }
+                } else {
+                    $io->info('Tests completed, generating reports...');
+                    $this->testRunnerService->generateReports($run);
+                }
 
                 $counts = $run->getResultCounts();
                 $io->newLine();

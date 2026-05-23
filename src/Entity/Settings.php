@@ -60,6 +60,13 @@ class Settings
     private bool $headlessMode = false;
 
     /**
+     * Whether to auto-generate Allure reports for individual (non-suite) test runs.
+     * When disabled, reports are only generated for suite runs. Use app:report:generate for manual generation.
+     */
+    #[ORM\Column(type: Types::BOOLEAN)]
+    private bool $autoReportForIndividualRuns = true;
+
+    /**
      * Whether two-factor authentication is enforced for all users.
      */
     #[ORM\Column(type: Types::BOOLEAN)]
@@ -169,6 +176,18 @@ class Settings
     public function setEnforce2fa(bool $enforce2fa): static
     {
         $this->enforce2fa = $enforce2fa;
+
+        return $this;
+    }
+
+    public function isAutoReportForIndividualRuns(): bool
+    {
+        return $this->autoReportForIndividualRuns;
+    }
+
+    public function setAutoReportForIndividualRuns(bool $autoReportForIndividualRuns): static
+    {
+        $this->autoReportForIndividualRuns = $autoReportForIndividualRuns;
 
         return $this;
     }
