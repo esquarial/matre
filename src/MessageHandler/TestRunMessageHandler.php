@@ -182,10 +182,17 @@ class TestRunMessageHandler
                         'runId' => $run->getId(),
                     ]);
                     // Mark run as completed (preserve failed status if already failed)
-                    if (TestRun::STATUS_FAILED !== $run->getStatus()) {
-                        $run->markCompleted();
+                    try {
+                        if (TestRun::STATUS_FAILED !== $run->getStatus()) {
+                            $run->markCompleted();
+                        }
+                        $this->entityManager->flush();
+                    } catch (\Throwable $e) {
+                        $this->logger->error('Failed to mark skipped-report run as completed, continuing to NOTIFY', [
+                            'runId' => $run->getId(),
+                            'error' => $e->getMessage(),
+                        ]);
                     }
-                    $this->entityManager->flush();
                 }
             }
 

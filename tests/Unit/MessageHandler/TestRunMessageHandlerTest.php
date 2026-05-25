@@ -8,6 +8,7 @@ use App\Entity\TestEnvironment;
 use App\Entity\TestRun;
 use App\Message\TestRunMessage;
 use App\MessageHandler\TestRunMessageHandler;
+use App\Repository\SettingsRepository;
 use App\Repository\TestRunRepository;
 use App\Repository\UserRepository;
 use App\Service\NotificationService;
@@ -65,6 +66,7 @@ final class TestRunMessageHandlerTest extends TestCase
         $handler = new TestRunMessageHandler(
             $testRunRepository,
             $this->createStub(UserRepository::class),
+            $this->createStub(SettingsRepository::class),
             $testRunnerService,
             $this->createStub(NotificationService::class),
             $messageBus,
@@ -119,6 +121,7 @@ final class TestRunMessageHandlerTest extends TestCase
         $handler = new TestRunMessageHandler(
             $testRunRepository,
             $this->createStub(UserRepository::class),
+            $this->createStub(SettingsRepository::class),
             $testRunnerService,
             $this->createStub(NotificationService::class),
             $messageBus,
@@ -163,6 +166,7 @@ final class TestRunMessageHandlerTest extends TestCase
         $handler = new TestRunMessageHandler(
             $testRunRepository,
             $this->createStub(UserRepository::class),
+            $this->createStub(SettingsRepository::class),
             $this->createStub(TestRunnerService::class),
             $this->createStub(NotificationService::class),
             $this->createStub(MessageBusInterface::class),

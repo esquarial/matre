@@ -153,9 +153,6 @@ class TestRunCommand extends Command
 
                 if ($skipReport) {
                     $io->info('Skipping report generation (disabled for individual runs).');
-                    if (TestRun::STATUS_FAILED !== $run->getStatus()) {
-                        $run->markCompleted();
-                    }
                 } else {
                     $io->info('Tests completed, generating reports...');
                     $this->testRunnerService->generateReports($run);
