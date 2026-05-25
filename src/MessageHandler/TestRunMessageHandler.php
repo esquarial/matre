@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\MessageHandler;
 
 use App\Entity\TestRun;
+use App\Entity\TestSuite;
 use App\Entity\User;
 use App\Message\TestRunMessage;
 use App\Repository\SettingsRepository;
@@ -159,7 +160,22 @@ class TestRunMessageHandler
             // Continue to REPORT - service should have marked run as failed
         }
 
-        // Always dispatch REPORT (idempotency in NOTIFY prevents duplicate notifications)
+        // Check for auto-retry before going to REPORT
+        if ($this->shouldAutoRetry($run)) {
+            $retryRun = $this->dispatchAutoRetry($run);
+            if (null !== $retryRun) {
+                // Skip REPORT and NOTIFY for intermediate run, go straight to CLEANUP
+                $this->messageBus->dispatch(new TestRunMessage(
+                    $run->getId(),
+                    $run->getEnvironment()->getId(),
+                    TestRunMessage::PHASE_CLEANUP,
+                ));
+
+                return;
+            }
+        }
+
+        // Normal flow: dispatch REPORT (idempotency in NOTIFY prevents duplicate notifications)
         $this->messageBus->dispatch(new TestRunMessage(
             $run->getId(),
             $run->getEnvironment()->getId(),
@@ -305,5 +321,68 @@ class TestRunMessageHandler
             ]);
             // No next phase - just log and continue
         }
+    }
+
+    private function shouldAutoRetry(TestRun $run): bool
+    {
+        // Group/suite runs use inline retry (per-test) inside executeGroupRun,
+        // so skip the after-run auto-retry for them
+        $suite = $run->getSuite();
+        if (null !== $suite && TestSuite::TYPE_MFTF_GROUP === $suite->getType()) {
+            return false;
+        }
+
+        // Only retry runs that have failed results
+        $counts = $run->getResultCounts();
+        if ($counts['failed'] === 0 && $counts['broken'] === 0) {
+            return false;
+        }
+
+        $settings = $this->settingsRepository->getSettings();
+        $maxRetries = $settings->getMaxRetryCount();
+        if ($maxRetries <= 0) {
+            return false;
+        }
+
+        // Check if we've exceeded retry limit
+        if ($run->getRetryAttempt() >= $maxRetries) {
+            $this->logger->info('Max retry attempts reached', [
+                'runId' => $run->getId(),
+                'attempt' => $run->getRetryAttempt(),
+                'maxRetries' => $maxRetries,
+            ]);
+
+            return false;
+        }
+
+        return true;
+    }
+
+    private function dispatchAutoRetry(TestRun $run): ?TestRun
+    {
+        $retryRun = $this->testRunnerService->retryFailedRun(
+            $run,
+            null,
+            $run->getRetryAttempt() + 1,
+        );
+
+        if (null === $retryRun) {
+            return null;
+        }
+
+        $this->logger->info('Auto-retry dispatched for failed tests', [
+            'originalRunId' => $run->getId(),
+            'retryRunId' => $retryRun->getId(),
+            'attempt' => $retryRun->getRetryAttempt(),
+            'retryTests' => $retryRun->getRetryTestIdsArray(),
+        ]);
+
+        $this->messageBus->dispatch(new TestRunMessage(
+            $retryRun->getId(),
+            $retryRun->getEnvironment()->getId(),
+            TestRunMessage::PHASE_PREPARE,
+        ));
+
+        return $retryRun;
     }
 }

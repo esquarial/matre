@@ -25,6 +25,7 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ORM\Index(name: 'IDX_TEST_RUN_ENV_STATUS', columns: ['environment_id', 'status'])]
 #[ORM\Index(name: 'IDX_TEST_RUN_SUITE', columns: ['suite_id'])]
 #[ORM\Index(name: 'IDX_TEST_RUN_EXECUTED_BY', columns: ['executed_by_id'])]
+#[ORM\Index(name: 'IDX_TEST_RUN_ORIGINAL', columns: ['original_run_id'])]
 #[ORM\HasLifecycleCallbacks]
 class TestRun
 {
@@ -86,6 +87,16 @@ class TestRun
     #[ORM\ManyToOne(targetEntity: User::class)]
     #[ORM\JoinColumn(name: 'executed_by_id', nullable: true, onDelete: 'SET NULL')]
     private ?User $executedBy = null;
+
+    #[ORM\ManyToOne(targetEntity: TestRun::class)]
+    #[ORM\JoinColumn(name: 'original_run_id', nullable: true, onDelete: 'SET NULL')]
+    private ?TestRun $originalRun = null;
+
+    #[ORM\Column(type: Types::SMALLINT, options: ['default' => 0])]
+    private int $retryAttempt = 0;
+
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    private ?string $retryTestIds = null;
 
     #[ORM\Column(type: Types::STRING, length: 20)]
     #[Assert\NotBlank]
@@ -486,6 +497,76 @@ class TestRun
         $this->updatedAt = $updatedAt;
 
         return $this;
+    }
+
+    public function getOriginalRun(): ?TestRun
+    {
+        return $this->originalRun;
+    }
+
+    public function setOriginalRun(?TestRun $originalRun): static
+    {
+        $this->originalRun = $originalRun;
+
+        return $this;
+    }
+
+    public function getRetryAttempt(): int
+    {
+        return $this->retryAttempt;
+    }
+
+    public function setRetryAttempt(int $retryAttempt): static
+    {
+        $this->retryAttempt = $retryAttempt;
+
+        return $this;
+    }
+
+    public function getRetryTestIds(): ?string
+    {
+        return $this->retryTestIds;
+    }
+
+    public function setRetryTestIds(?string $retryTestIds): static
+    {
+        $this->retryTestIds = $retryTestIds;
+
+        return $this;
+    }
+
+    /**
+     * @return string[]
+     */
+    public function getRetryTestIdsArray(): array
+    {
+        if (null === $this->retryTestIds) {
+            return [];
+        }
+
+        $decoded = json_decode($this->retryTestIds, true);
+
+        return \is_array($decoded) ? $decoded : [];
+    }
+
+    /**
+     * @param string[] $testIds
+     */
+    public function setRetryTestIdsFromArray(array $testIds): static
+    {
+        $this->retryTestIds = empty($testIds) ? null : json_encode(array_values($testIds));
+
+        return $this;
+    }
+
+    public function isRetry(): bool
+    {
+        return null !== $this->originalRun;
+    }
+
+    public function isRetryOfFailed(): bool
+    {
+        return null !== $this->originalRun && null !== $this->retryTestIds;
     }
 
     /**

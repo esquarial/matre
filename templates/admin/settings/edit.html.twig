@@ -63,6 +63,16 @@
                     </div>
                     <div class="form-text text-muted" style="margin-left: 1.5em;">{{ form.autoReportForIndividualRuns.vars.help }}</div>
                 </div>
+
+                <div class="form-grid">
+                    <div>{{ form_row(form.maxRetryCount) }}</div>
+                </div>
+
+                <div class="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
+                    <i class="bi bi-info-circle me-2"></i>
+                    When enabled, tests that fail due to infrastructure errors (WebDriver timeouts, element interactability, stale elements)
+                    will be automatically retried. Genuine assertion failures are never retried.
+                </div>
             </div>
 
             <div class="form-section">

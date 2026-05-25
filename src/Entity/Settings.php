@@ -72,6 +72,10 @@ class Settings
     #[ORM\Column(type: Types::BOOLEAN)]
     private bool $enforce2fa = false;
 
+    #[ORM\Column(type: Types::SMALLINT, options: ['default' => 0])]
+    #[Assert\Range(min: 0, max: 5)]
+    private int $maxRetryCount = 0;
+
     #[ORM\Column(type: Types::DATETIME_IMMUTABLE)]
     private \DateTimeImmutable $createdAt;
 
@@ -188,6 +192,18 @@ class Settings
     public function setAutoReportForIndividualRuns(bool $autoReportForIndividualRuns): static
     {
         $this->autoReportForIndividualRuns = $autoReportForIndividualRuns;
+
+        return $this;
+    }
+
+    public function getMaxRetryCount(): int
+    {
+        return $this->maxRetryCount;
+    }
+
+    public function setMaxRetryCount(int $maxRetryCount): static
+    {
+        $this->maxRetryCount = $maxRetryCount;
 
         return $this;
     }

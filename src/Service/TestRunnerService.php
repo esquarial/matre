@@ -10,6 +10,7 @@ use App\Entity\TestResult;
 use App\Entity\TestRun;
 use App\Entity\TestSuite;
 use App\Entity\User;
+use App\Repository\SettingsRepository;
 use App\Repository\TestRunRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
@@ -20,9 +21,23 @@ use Symfony\Component\Lock\LockFactory;
  */
 class TestRunnerService
 {
+    private const RETRYABLE_ERROR_PATTERNS = [
+        'TimeoutException',
+        'ElementNotInteractableException',
+        'ElementClickInterceptedException',
+        'JavascriptErrorException',
+        'StaleElementReferenceException',
+        'element not interactable',
+        'element click intercepted',
+        'javascript error:',
+        'timed out after',
+        'timed out waiting',
+    ];
+
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
         private readonly TestRunRepository $testRunRepository,
+        private readonly SettingsRepository $settingsRepository,
         private readonly ModuleCloneService $moduleCloneService,
         private readonly MftfExecutorService $mftfExecutor,
         private readonly PlaywrightExecutorService $playwrightExecutor,
@@ -160,6 +175,14 @@ class TestRunnerService
                     $heartbeatCallback();
                 }
             };
+
+            // Check if this is a retry-failed run (specific failed tests)
+            $retryTestIds = $run->getRetryTestIdsArray();
+            if (!empty($retryTestIds)) {
+                $this->executeRetryRun($run, $retryTestIds, $lockRefreshCallback, $wrappedHeartbeat);
+
+                return;
+            }
 
             // Check if this is a group run that should use sequential execution
             $suite = $run->getSuite();
@@ -401,11 +424,11 @@ class TestRunnerService
     }
 
     /**
-     * Retry a failed test run.
+     * Retry a failed test run (full retry of all tests).
      */
     public function retryRun(TestRun $originalRun, ?User $executedBy = null): TestRun
     {
-        return $this->createRun(
+        $newRun = $this->createRun(
             $originalRun->getEnvironment(),
             $originalRun->getType(),
             $originalRun->getTestFilter(),
@@ -414,6 +437,67 @@ class TestRunnerService
             $originalRun->isSendNotifications(),
             $executedBy,
         );
+
+        // Track lineage: point to the root original run
+        $rootRun = $originalRun->getOriginalRun() ?? $originalRun;
+        $newRun->setOriginalRun($rootRun);
+        $newRun->setRetryAttempt($originalRun->getRetryAttempt() + 1);
+        $this->entityManager->flush();
+
+        return $newRun;
+    }
+
+    /**
+     * Retry only the failed tests from a completed run.
+     *
+     * Analyzes each failed result to determine if it's a retryable infrastructure error.
+     * Returns null if no retryable failures are found.
+     */
+    public function retryFailedRun(TestRun $originalRun, ?User $executedBy = null, int $retryAttempt = 1): ?TestRun
+    {
+        $retryableTestIds = [];
+
+        foreach ($originalRun->getResults() as $result) {
+            if ($this->isRetryableFailure($result)) {
+                $testId = $result->getTestId() ?: $result->getTestName();
+                $retryableTestIds[] = $testId;
+            }
+        }
+
+        if (empty($retryableTestIds)) {
+            $this->logger->info('No retryable failures found', [
+                'runId' => $originalRun->getId(),
+            ]);
+
+            return null;
+        }
+
+        $this->logger->info('Creating retry run for failed tests', [
+            'originalRunId' => $originalRun->getId(),
+            'retryableCount' => \count($retryableTestIds),
+            'retryableTests' => $retryableTestIds,
+            'attempt' => $retryAttempt,
+        ]);
+
+        // Root original: always point to the very first run in the chain
+        $rootRun = $originalRun->getOriginalRun() ?? $originalRun;
+
+        $newRun = $this->createRun(
+            $originalRun->getEnvironment(),
+            $originalRun->getType(),
+            1 === \count($retryableTestIds) ? $retryableTestIds[0] : null,
+            $originalRun->getSuite(),
+            $executedBy ? TestRun::TRIGGER_MANUAL : $originalRun->getTriggeredBy(),
+            $originalRun->isSendNotifications(),
+            $executedBy,
+        );
+
+        $newRun->setOriginalRun($rootRun);
+        $newRun->setRetryAttempt($retryAttempt);
+        $newRun->setRetryTestIdsFromArray($retryableTestIds);
+        $this->entityManager->flush();
+
+        return $newRun;
     }
 
     /**
@@ -432,6 +516,141 @@ class TestRunnerService
     public function hasRunningForEnvironment(TestEnvironment $environment): bool
     {
         return $this->testRunRepository->hasRunningForEnvironment($environment);
+    }
+
+    /**
+     * Execute a retry run with specific failed test IDs sequentially.
+     *
+     * @param string[] $testIds Test IDs to retry
+     */
+    private function executeRetryRun(TestRun $run, array $testIds, callable $lockRefreshCallback, ?\Closure $heartbeatCallback = null): void
+    {
+        $this->logger->info('Starting retry execution for failed tests', [
+            'runId' => $run->getId(),
+            'testIds' => $testIds,
+            'attempt' => $run->getRetryAttempt(),
+        ]);
+
+        $maxRetries = $this->settingsRepository->getSettings()->getMaxRetryCount();
+        $totalTests = \count($testIds);
+        $completedTests = $run->getResults()->count(); // Redelivery protection
+
+        $run->setProgress($completedTests, $totalTests);
+        $run->setStatus(TestRun::STATUS_RUNNING);
+        $this->entityManager->flush();
+
+        foreach ($testIds as $testId) {
+            // Skip already-executed tests (redelivery protection)
+            $existingResult = $run->getResults()->filter(
+                fn ($r) => $r->getTestName() === $testId || $r->getTestId() === $testId,
+            )->first();
+
+            if ($existingResult) {
+                $this->logger->info('Skipping already-executed test (redelivery protection)', [
+                    'runId' => $run->getId(),
+                    'testId' => $testId,
+                ]);
+                ++$completedTests;
+
+                continue;
+            }
+
+            // Check for cancellation
+            $this->entityManager->refresh($run);
+            if (TestRun::STATUS_CANCELLED === $run->getStatus()) {
+                $this->logger->info('Retry run cancelled', ['runId' => $run->getId()]);
+
+                break;
+            }
+
+            $run->setCurrentTestName($testId);
+            $run->setProgress($completedTests, $totalTests);
+            $run->setUpdatedAt(new \DateTimeImmutable());
+            $this->entityManager->flush();
+
+            $this->logger->info('Retrying failed test', [
+                'runId' => $run->getId(),
+                'testId' => $testId,
+                'progress' => ($completedTests + 1) . '/' . $totalTests,
+            ]);
+
+            $cancelled = $this->executeSingleTestWithRetry($run, $testId, $maxRetries, $lockRefreshCallback, $heartbeatCallback);
+
+            if ($cancelled) {
+                break;
+            }
+
+            ++$completedTests;
+            $run->setUpdatedAt(new \DateTimeImmutable());
+            $this->entityManager->flush();
+        }
+
+        // Clear current test
+        $run->setCurrentTestName(null);
+        $run->setProgress($completedTests, $totalTests);
+        $this->entityManager->flush();
+
+        // Collect artifacts
+        $allResults = $run->getResults()->toArray();
+        $artifacts = $this->artifactCollector->collectArtifacts($run);
+        if (!empty($artifacts['screenshots'])) {
+            $this->artifactCollector->associateScreenshotsWithResults($allResults, $artifacts['screenshots']);
+        }
+
+        $this->entityManager->flush();
+
+        // Determine final status
+        $this->entityManager->refresh($run);
+        if (TestRun::STATUS_CANCELLED !== $run->getStatus()) {
+            $this->finalizeGroupRunStatus($run, $allResults);
+        }
+
+        $this->entityManager->flush();
+
+        $this->logger->info('Retry execution completed', [
+            'runId' => $run->getId(),
+            'completedTests' => $completedTests,
+            'totalTests' => $totalTests,
+            'status' => $run->getStatus(),
+        ]);
+    }
+
+    /**
+     * Check if a test failure is caused by a retryable infrastructure/WebDriver error.
+     */
+    public function isRetryableFailure(TestResult $result): bool
+    {
+        if (!$result->isFailed() && !$result->isBroken()) {
+            return false;
+        }
+
+        // Check errorMessage on the result
+        $errorMessage = $result->getErrorMessage();
+        if ($errorMessage && $this->matchesRetryablePattern($errorMessage)) {
+            return true;
+        }
+
+        // Fallback: check output file content
+        $outputFile = $result->getOutputFilePath();
+        if ($outputFile && file_exists($outputFile)) {
+            $output = file_get_contents($outputFile);
+            if ($output && $this->matchesRetryablePattern($output)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function matchesRetryablePattern(string $text): bool
+    {
+        foreach (self::RETRYABLE_ERROR_PATTERNS as $pattern) {
+            if (stripos($text, $pattern) !== false) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -552,6 +771,9 @@ class TestRunnerService
             ]);
         }
 
+        // Get max retry count for inline retry of infrastructure failures
+        $maxRetries = $this->settingsRepository->getSettings()->getMaxRetryCount();
+
         // Set initial progress (may be non-zero on worker restart)
         $run->setProgress($completedTests, $totalTests);
         $run->setStatus(TestRun::STATUS_RUNNING);
@@ -598,90 +820,10 @@ class TestRunnerService
                 'progress' => ($completedTests + 1) . '/' . $totalTests,
             ]);
 
-            try {
-                // Execute single test
-                $result = $this->mftfExecutor->executeSingleTest($run, $testName, $lockRefreshCallback, $heartbeatCallback);
+            $cancelled = $this->executeSingleTestWithRetry($run, $testName, $maxRetries, $lockRefreshCallback, $heartbeatCallback);
 
-                // Parse and create TestResult
-                $testResults = $this->mftfExecutor->parseResults(
-                    $run,
-                    $result['output'],
-                    $result['outputFilePath'] ?? null,
-                );
-
-                if (empty($testResults)) {
-                    // Create a broken result if parsing failed
-                    $this->logger->warning('No results parsed for test, creating broken result', [
-                        'testName' => $testName,
-                    ]);
-                    $errorMessage = $this->mftfExecutor->extractErrorSummary($result['output']);
-                    $testResult = new TestResult();
-                    $testResult->setTestRun($run);
-                    $testResult->setTestName($testName);
-                    $testResult->setStatus(TestResult::STATUS_BROKEN);
-                    $testResult->setErrorMessage($errorMessage);
-                    $testResult->setOutputFilePath($result['outputFilePath'] ?? null);
-                    $run->addResult($testResult);
-                    $this->entityManager->persist($testResult);
-                } else {
-                    foreach ($testResults as $testResult) {
-                        $testResult->setOutputFilePath($result['outputFilePath'] ?? null);
-                        $run->addResult($testResult);
-                        $this->entityManager->persist($testResult);
-                    }
-                }
-            } catch (\Throwable $e) {
-                // Check if this is a cancellation
-                if (str_contains($e->getMessage(), 'cancelled')) {
-                    $this->logger->info('Test run cancelled during execution', [
-                        'runId' => $run->getId(),
-                        'testName' => $testName,
-                    ]);
-                    $this->entityManager->flush();
-
-                    break; // Exit the loop
-                }
-
-                // Test crashed - create broken result and continue with next test
-                $this->logger->error('Test execution crashed, continuing with next test', [
-                    'runId' => $run->getId(),
-                    'testName' => $testName,
-                    'error' => $e->getMessage(),
-                ]);
-
-                $testResult = new TestResult();
-                $testResult->setTestRun($run);
-                $testResult->setTestName($testName);
-                $testResult->setStatus(TestResult::STATUS_BROKEN);
-                $testResult->setErrorMessage('Test crashed: ' . $e->getMessage());
-                $run->addResult($testResult);
-                $this->entityManager->persist($testResult);
-            }
-
-            // Copy Allure results + generate report (inside try so failures don't crash the run)
-            try {
-                $this->allureReportService->copyTestAllureResults($run->getId(), $testName);
-                $this->allureReportService->generateIncrementalReport($run);
-            } catch (\Exception $e) {
-                $this->logger->warning('Allure result processing failed, continuing', [
-                    'runId' => $run->getId(),
-                    'testName' => $testName,
-                    'error' => $e->getMessage(),
-                ]);
-            }
-
-            // Collect screenshot immediately so it's visible in UI during execution
-            $latestResults = array_filter($run->getResults()->toArray(), fn ($r) => $r->getTestName() === $testName || $r->getTestId() === $testName);
-            foreach ($latestResults as $latestResult) {
-                $this->artifactCollector->collectTestScreenshot($run, $latestResult);
-
-                // Get duration from Allure if not available from MFTF output (crashed tests)
-                if (null === $latestResult->getDuration()) {
-                    $allureDuration = $this->allureStepParser->getDurationForResult($latestResult);
-                    if (null !== $allureDuration) {
-                        $latestResult->setDuration($allureDuration);
-                    }
-                }
+            if ($cancelled) {
+                break;
             }
 
             ++$completedTests;
@@ -733,6 +875,146 @@ class TestRunnerService
             'totalTests' => $totalTests,
             'failedCount' => $failedCount,
         ]);
+    }
+
+    /**
+     * Execute a single test with inline retry for retryable infrastructure failures.
+     *
+     * @return bool True if the run was cancelled during execution
+     */
+    private function executeSingleTestWithRetry(
+        TestRun $run,
+        string $testName,
+        int $maxRetries,
+        callable $lockRefreshCallback,
+        ?\Closure $heartbeatCallback = null,
+    ): bool {
+        $maxAttempts = $maxRetries + 1; // 1 initial + N retries
+
+        for ($attempt = 0; $attempt < $maxAttempts; ++$attempt) {
+            try {
+                $result = $this->mftfExecutor->executeSingleTest($run, $testName, $lockRefreshCallback, $heartbeatCallback);
+
+                $testResults = $this->mftfExecutor->parseResults(
+                    $run,
+                    $result['output'],
+                    $result['outputFilePath'] ?? null,
+                );
+
+                if (empty($testResults)) {
+                    $this->logger->warning('No results parsed for test, creating broken result', [
+                        'testName' => $testName,
+                    ]);
+                    $errorMessage = $this->mftfExecutor->extractErrorSummary($result['output']);
+                    $testResult = new TestResult();
+                    $testResult->setTestRun($run);
+                    $testResult->setTestName($testName);
+                    $testResult->setStatus(TestResult::STATUS_BROKEN);
+                    $testResult->setErrorMessage($errorMessage);
+                    $testResult->setOutputFilePath($result['outputFilePath'] ?? null);
+                    $testResults = [$testResult];
+                } else {
+                    foreach ($testResults as $testResult) {
+                        $testResult->setOutputFilePath($result['outputFilePath'] ?? null);
+                    }
+                }
+            } catch (\Throwable $e) {
+                if (str_contains($e->getMessage(), 'cancelled')) {
+                    $this->logger->info('Test run cancelled during execution', [
+                        'runId' => $run->getId(),
+                        'testName' => $testName,
+                    ]);
+                    $this->entityManager->flush();
+
+                    return true;
+                }
+
+                $this->logger->error('Test execution crashed, continuing with next test', [
+                    'runId' => $run->getId(),
+                    'testName' => $testName,
+                    'error' => $e->getMessage(),
+                ]);
+
+                $testResult = new TestResult();
+                $testResult->setTestRun($run);
+                $testResult->setTestName($testName);
+                $testResult->setStatus(TestResult::STATUS_BROKEN);
+                $testResult->setErrorMessage('Test crashed: ' . $e->getMessage());
+                $testResults = [$testResult];
+            }
+
+            // Check if any result is a retryable failure and we have retries left
+            $isLastAttempt = $attempt >= $maxAttempts - 1;
+            $hasRetryableFailure = false;
+
+            if (!$isLastAttempt) {
+                foreach ($testResults as $tr) {
+                    if (($tr->isFailed() || $tr->isBroken()) && $this->isRetryableFailure($tr)) {
+                        $hasRetryableFailure = true;
+
+                        break;
+                    }
+                }
+            }
+
+            if ($hasRetryableFailure) {
+                $this->logger->info('Retrying test inline due to infrastructure failure', [
+                    'runId' => $run->getId(),
+                    'testName' => $testName,
+                    'attempt' => $attempt + 1,
+                    'maxRetries' => $maxRetries,
+                    'errorMessage' => $testResults[0]->getErrorMessage(),
+                ]);
+
+                // Don't persist the failed results — retry on next iteration
+                continue;
+            }
+
+            // No retry needed (passed, non-retryable failure, or retries exhausted)
+            // Persist the final results
+            foreach ($testResults as $tr) {
+                $run->addResult($tr);
+                $this->entityManager->persist($tr);
+            }
+
+            if ($attempt > 0) {
+                $this->logger->info('Test retry completed', [
+                    'runId' => $run->getId(),
+                    'testName' => $testName,
+                    'totalAttempts' => $attempt + 1,
+                    'finalStatus' => $testResults[0]->getStatus(),
+                ]);
+            }
+
+            break;
+        }
+
+        // Copy Allure results + generate report
+        try {
+            $this->allureReportService->copyTestAllureResults($run->getId(), $testName);
+            $this->allureReportService->generateIncrementalReport($run);
+        } catch (\Exception $e) {
+            $this->logger->warning('Allure result processing failed, continuing', [
+                'runId' => $run->getId(),
+                'testName' => $testName,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        // Collect screenshot immediately so it's visible in UI during execution
+        $latestResults = array_filter($run->getResults()->toArray(), fn ($r) => $r->getTestName() === $testName || $r->getTestId() === $testName);
+        foreach ($latestResults as $latestResult) {
+            $this->artifactCollector->collectTestScreenshot($run, $latestResult);
+
+            if (null === $latestResult->getDuration()) {
+                $allureDuration = $this->allureStepParser->getDurationForResult($latestResult);
+                if (null !== $allureDuration) {
+                    $latestResult->setDuration($allureDuration);
+                }
+            }
+        }
+
+        return false;
     }
 
     /**

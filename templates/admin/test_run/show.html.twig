@@ -107,6 +107,18 @@
                         <td>{{ run.durationFormatted }}</td>
                     </tr>
                     {% endif %}
+                    {% if run.originalRun %}
+                    <tr>
+                        <th>Retry Of</th>
+                        <td>
+                            <a href="{{ path('admin_test_run_show', {id: run.originalRun.id}) }}">Run #{{ run.originalRun.id }}</a>
+                            <span class="badge bg-info ms-1">Attempt {{ run.retryAttempt }}</span>
+                            {% if run.retryOfFailed %}
+                                <span class="badge bg-warning ms-1">Failed Only</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endif %}
                 </table>
             </div>
         </div>
@@ -359,10 +371,20 @@
                 {% endif %}
 
                 {% if run.status in ['completed', 'failed', 'cancelled'] %}
-                <form action="{{ path('admin_test_run_retry', {id: run.id}) }}" method="post">
+                {% set counts = run.resultCounts %}
+                {% if counts.failed > 0 or counts.broken > 0 %}
+                <form action="{{ path('admin_test_run_retry_failed', {id: run.id}) }}" method="post">
+                    <input type="hidden" name="_token" value="{{ csrf_token('retry_failed' ~ run.id) }}">
+                    <button type="submit" class="btn btn-outline-warning w-100"
+                            onclick="return confirm('Retry failed test(s) with infrastructure errors?')">
+                        <i class="bi bi-arrow-repeat"></i> Retry Failed
+                    </button>
+                </form>
+                {% endif %}
+                <form action="{{ path('admin_test_run_retry', {id: run.id}) }}" method="post" class="mt-2">
                     <input type="hidden" name="_token" value="{{ csrf_token('retry' ~ run.id) }}">
                     <button type="submit" class="btn btn-warning w-100">
-                        <i class="bi bi-arrow-repeat"></i> Retry
+                        <i class="bi bi-arrow-repeat"></i> Retry All
                     </button>
                 </form>
                 <form action="{{ path('admin_test_run_resend_notification', {id: run.id}) }}" method="post" class="mt-2">

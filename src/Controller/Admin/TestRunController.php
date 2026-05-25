@@ -208,6 +208,43 @@ class TestRunController extends AbstractController
         return $this->redirectToRoute('admin_test_run_show', ['id' => $run->getId()]);
     }
 
+    #[Route('/{id}/retry-failed', name: 'admin_test_run_retry_failed', methods: ['POST'], requirements: ['id' => '\d+'])]
+    public function retryFailed(Request $request, int $id): Response
+    {
+        $run = $this->testRunRepository->find($id);
+        if (!$run) {
+            $this->addFlash('error', sprintf('Test run #%d does not exist.', $id));
+
+            return $this->redirectToRoute('admin_test_run_index');
+        }
+
+        if ($this->isCsrfTokenValid('retry_failed' . $run->getId(), $request->request->get('_token'))) {
+            $newRun = $this->testRunnerService->retryFailedRun($run, $this->getUser());
+
+            if (null === $newRun) {
+                $this->addFlash('warning', 'No retryable failures found. Only WebDriver/infrastructure errors can be retried.');
+
+                return $this->redirectToRoute('admin_test_run_show', ['id' => $run->getId()]);
+            }
+
+            // Dispatch async execution
+            $this->messageBus->dispatch(new TestRunMessage(
+                $newRun->getId(),
+                $newRun->getEnvironment()->getId(),
+                TestRunMessage::PHASE_PREPARE,
+            ));
+
+            $retryCount = \count($newRun->getRetryTestIdsArray());
+            $this->addFlash('success', sprintf('Retry run #%d created for %d failed test(s).', $newRun->getId(), $retryCount));
+
+            return $this->redirectToRoute('admin_test_run_show', ['id' => $newRun->getId()]);
+        }
+
+        $this->addFlash('error', 'Invalid CSRF token.');
+
+        return $this->redirectToRoute('admin_test_run_show', ['id' => $run->getId()]);
+    }
+
     #[Route('/{id}/resend-notification', name: 'admin_test_run_resend_notification', methods: ['POST'], requirements: ['id' => '\d+'])]
     public function resendNotification(Request $request, int $id): Response
     {

@@ -43,6 +43,7 @@ class TestRunCommand extends Command
             ->addOption('filter', 'f', InputOption::VALUE_OPTIONAL, 'Test filter (test name, group, or pattern)')
             ->addOption('suite', 's', InputOption::VALUE_OPTIONAL, 'Test suite name')
             ->addOption('sync', null, InputOption::VALUE_NONE, 'Run synchronously (wait for completion)')
+            ->addOption('retry-failed', null, InputOption::VALUE_NONE, 'Automatically retry infrastructure-failed tests (sync mode only)')
             ->setHelp(
                 <<<'HELP'
                     The <info>%command.name%</info> command runs tests against a target environment:
@@ -73,6 +74,7 @@ class TestRunCommand extends Command
         $filter = $input->getOption('filter');
         $suiteName = $input->getOption('suite');
         $sync = $input->getOption('sync');
+        $retryFailed = $input->getOption('retry-failed');
 
         // Validate type
         if (!in_array($type, [TestRun::TYPE_MFTF, TestRun::TYPE_PLAYWRIGHT, TestRun::TYPE_BOTH], true)) {
@@ -145,6 +147,41 @@ class TestRunCommand extends Command
                 $io->newLine();
 
                 $this->testRunnerService->executeRun($run);
+
+                // Retry-failed loop for sync mode
+                if ($retryFailed) {
+                    $settings = $this->settingsRepository->getSettings();
+                    $maxRetries = max(1, $settings->getMaxRetryCount());
+                    $currentRun = $run;
+
+                    for ($attempt = 1; $attempt <= $maxRetries; ++$attempt) {
+                        $currentCounts = $currentRun->getResultCounts();
+                        if ($currentCounts['failed'] === 0 && $currentCounts['broken'] === 0) {
+                            $io->info('No failures to retry.');
+
+                            break;
+                        }
+
+                        $retryRun = $this->testRunnerService->retryFailedRun($currentRun, null, $attempt);
+                        if (null === $retryRun) {
+                            $io->info('No retryable infrastructure failures found.');
+
+                            break;
+                        }
+
+                        $retryCount = \count($retryRun->getRetryTestIdsArray());
+                        $io->newLine();
+                        $io->note(sprintf('Retry attempt %d/%d: retrying %d failed test(s)...', $attempt, $maxRetries, $retryCount));
+
+                        $this->testRunnerService->prepareRun($retryRun);
+                        $this->testRunnerService->executeRun($retryRun);
+                        $currentRun = $retryRun;
+                    }
+
+                    // Use the last run for final reporting
+                    $run = $currentRun;
+                }
+
                 $io->newLine();
 
                 // Skip report for individual runs when setting is disabled

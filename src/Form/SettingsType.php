@@ -96,15 +96,20 @@ class SettingsType extends AbstractType
                 ],
                 'help' => 'When disabled, Allure reports are only auto-generated for suite runs. Use app:report:generate to create reports manually.',
             ])
-
-            // Security
-            ->add('enforce2fa', CheckboxType::class, [
-                'label' => 'Enforce Two-Factor Authentication',
-                'required' => false,
-                'attr' => [
-                    'class' => 'form-check-input',
+            ->add('maxRetryCount', ChoiceType::class, [
+                'label' => 'Auto-Retry Failed Tests',
+                'choices' => [
+                    'Disabled' => 0,
+                    '1 retry' => 1,
+                    '2 retries' => 2,
+                    '3 retries' => 3,
+                    '4 retries' => 4,
+                    '5 retries' => 5,
                 ],
-                'help' => 'When enabled, all users must set up 2FA to access admin panel',
+                'attr' => [
+                    'class' => 'form-control',
+                ],
+                'help' => 'Automatically retry tests that fail due to WebDriver/infrastructure errors (timeouts, element interactability). Assertion failures are never retried.',
             ]);
     }
 

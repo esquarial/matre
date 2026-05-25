@@ -95,6 +95,7 @@ class SettingsRepository extends ServiceEntityRepository
         $settings->setSeoKeywords(null);
         $settings->setDefaultLocale('en');
         $settings->setHeadlessMode(true);
+        $settings->setMaxRetryCount(0);
 
         $this->save($settings, true);
 
