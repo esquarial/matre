@@ -43,7 +43,7 @@ class TestRunCommand extends Command
             ->addOption('filter', 'f', InputOption::VALUE_OPTIONAL, 'Test filter (test name, group, or pattern)')
             ->addOption('suite', 's', InputOption::VALUE_OPTIONAL, 'Test suite name')
             ->addOption('sync', null, InputOption::VALUE_NONE, 'Run synchronously (wait for completion)')
-            ->addOption('retry-failed', null, InputOption::VALUE_NONE, 'Automatically retry infrastructure-failed tests (sync mode only)')
+            ->addOption('retry-failed', null, InputOption::VALUE_NONE, 'Automatically retry infrastructure-failed tests (sync mode only; use only when no other runs are active for this environment)')
             ->setHelp(
                 <<<'HELP'
                     The <info>%command.name%</info> command runs tests against a target environment:

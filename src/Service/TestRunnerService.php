@@ -27,11 +27,6 @@ class TestRunnerService
         'ElementClickInterceptedException',
         'JavascriptErrorException',
         'StaleElementReferenceException',
-        'element not interactable',
-        'element click intercepted',
-        'javascript error:',
-        'timed out after',
-        'timed out waiting',
     ];
 
     public function __construct(
@@ -438,9 +433,7 @@ class TestRunnerService
             $executedBy,
         );
 
-        // Track lineage: point to the root original run
-        $rootRun = $originalRun->getOriginalRun() ?? $originalRun;
-        $newRun->setOriginalRun($rootRun);
+        $newRun->setOriginalRun($originalRun->getRootRun());
         $newRun->setRetryAttempt($originalRun->getRetryAttempt() + 1);
         $this->entityManager->flush();
 
@@ -455,6 +448,24 @@ class TestRunnerService
      */
     public function retryFailedRun(TestRun $originalRun, ?User $executedBy = null, int $retryAttempt = 1): ?TestRun
     {
+        // Atomic guard: prevent duplicate retry spawns on message redelivery.
+        // UPDATE only if retry_spawned_at IS NULL — same pattern as notification_sent_at.
+        $affectedRows = $this->entityManager->getConnection()->executeStatement(
+            'UPDATE matre_test_runs SET retry_spawned_at = NOW() WHERE id = ? AND retry_spawned_at IS NULL',
+            [$originalRun->getId()],
+        );
+
+        if (0 === $affectedRows) {
+            $this->logger->info('Retry already spawned for this run (redelivery guard)', [
+                'runId' => $originalRun->getId(),
+            ]);
+
+            return null;
+        }
+
+        // Refresh entity to reflect the DB change
+        $this->entityManager->refresh($originalRun);
+
         $retryableTestIds = [];
 
         foreach ($originalRun->getResults() as $result) {
@@ -469,6 +480,10 @@ class TestRunnerService
                 'runId' => $originalRun->getId(),
             ]);
 
+            // Reset the flag so a manual retry can still be triggered
+            $originalRun->setRetrySpawnedAt(null);
+            $this->entityManager->flush();
+
             return null;
         }
 
@@ -478,9 +493,6 @@ class TestRunnerService
             'retryableTests' => $retryableTestIds,
             'attempt' => $retryAttempt,
         ]);
-
-        // Root original: always point to the very first run in the chain
-        $rootRun = $originalRun->getOriginalRun() ?? $originalRun;
 
         $newRun = $this->createRun(
             $originalRun->getEnvironment(),
@@ -492,7 +504,7 @@ class TestRunnerService
             $executedBy,
         );
 
-        $newRun->setOriginalRun($rootRun);
+        $newRun->setOriginalRun($originalRun->getRootRun());
         $newRun->setRetryAttempt($retryAttempt);
         $newRun->setRetryTestIdsFromArray($retryableTestIds);
         $this->entityManager->flush();
@@ -617,6 +629,9 @@ class TestRunnerService
 
     /**
      * Check if a test failure is caused by a retryable infrastructure/WebDriver error.
+     *
+     * Only inspects the structured errorMessage field — never the raw output file,
+     * which can contain unrelated driver-log noise and trigger false positives.
      */
     public function isRetryableFailure(TestResult $result): bool
     {
@@ -624,22 +639,9 @@ class TestRunnerService
             return false;
         }
 
-        // Check errorMessage on the result
         $errorMessage = $result->getErrorMessage();
-        if ($errorMessage && $this->matchesRetryablePattern($errorMessage)) {
-            return true;
-        }
 
-        // Fallback: check output file content
-        $outputFile = $result->getOutputFilePath();
-        if ($outputFile && file_exists($outputFile)) {
-            $output = file_get_contents($outputFile);
-            if ($output && $this->matchesRetryablePattern($output)) {
-                return true;
-            }
-        }
-
-        return false;
+        return null !== $errorMessage && $this->matchesRetryablePattern($errorMessage);
     }
 
     private function matchesRetryablePattern(string $text): bool
@@ -958,6 +960,13 @@ class TestRunnerService
             }
 
             if ($hasRetryableFailure) {
+                // Preserve the failed attempt's log before it gets overwritten
+                $failedOutputPath = $testResults[0]->getOutputFilePath();
+                if ($failedOutputPath && file_exists($failedOutputPath)) {
+                    $attemptPath = preg_replace('/\.log$/', '.attempt-' . ($attempt + 1) . '.log', $failedOutputPath);
+                    rename($failedOutputPath, $attemptPath);
+                }
+
                 $this->logger->info('Retrying test inline due to infrastructure failure', [
                     'runId' => $run->getId(),
                     'testName' => $testName,

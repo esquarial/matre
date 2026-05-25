@@ -98,6 +98,9 @@ class TestRun
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     private ?string $retryTestIds = null;
 
+    #[ORM\Column(type: Types::DATETIME_IMMUTABLE, nullable: true)]
+    private ?\DateTimeImmutable $retrySpawnedAt = null;
+
     #[ORM\Column(type: Types::STRING, length: 20)]
     #[Assert\NotBlank]
     #[Assert\Choice(choices: [self::TYPE_MFTF, self::TYPE_PLAYWRIGHT, self::TYPE_BOTH])]
@@ -523,18 +526,6 @@ class TestRun
         return $this;
     }
 
-    public function getRetryTestIds(): ?string
-    {
-        return $this->retryTestIds;
-    }
-
-    public function setRetryTestIds(?string $retryTestIds): static
-    {
-        $this->retryTestIds = $retryTestIds;
-
-        return $this;
-    }
-
     /**
      * @return string[]
      */
@@ -559,14 +550,29 @@ class TestRun
         return $this;
     }
 
-    public function isRetry(): bool
+    /**
+     * Walk the originalRun chain to the very first run.
+     */
+    public function getRootRun(): self
     {
-        return null !== $this->originalRun;
+        return $this->originalRun ?? $this;
     }
 
     public function isRetryOfFailed(): bool
     {
         return null !== $this->originalRun && null !== $this->retryTestIds;
+    }
+
+    public function getRetrySpawnedAt(): ?\DateTimeImmutable
+    {
+        return $this->retrySpawnedAt;
+    }
+
+    public function setRetrySpawnedAt(?\DateTimeImmutable $retrySpawnedAt): static
+    {
+        $this->retrySpawnedAt = $retrySpawnedAt;
+
+        return $this;
     }
 
     /**

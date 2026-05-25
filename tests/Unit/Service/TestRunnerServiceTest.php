@@ -10,6 +10,7 @@ use App\Entity\TestResult;
 use App\Entity\TestRun;
 use App\Entity\TestSuite;
 use App\Entity\User;
+use App\Repository\SettingsRepository;
 use App\Repository\TestRunRepository;
 use App\Service\AllureReportService;
 use App\Service\AllureStepParserService;
@@ -37,6 +38,8 @@ class TestRunnerServiceTest extends TestCase
 
     private TestRunRepository $testRunRepository;
 
+    private SettingsRepository $settingsRepository;
+
     private ModuleCloneService $moduleCloneService;
 
     private MftfExecutorService $mftfExecutor;
@@ -63,6 +66,7 @@ class TestRunnerServiceTest extends TestCase
     {
         $this->entityManager = $this->createStub(EntityManagerInterface::class);
         $this->testRunRepository = $this->createStub(TestRunRepository::class);
+        $this->settingsRepository = $this->createStub(SettingsRepository::class);
         $this->moduleCloneService = $this->createStub(ModuleCloneService::class);
         $this->mftfExecutor = $this->createStub(MftfExecutorService::class);
         $this->playwrightExecutor = $this->createStub(PlaywrightExecutorService::class);
@@ -1300,7 +1304,7 @@ class TestRunnerServiceTest extends TestCase
         $originalRun->setTriggeredBy(TestRun::TRIGGER_SCHEDULER);
 
         $em->expects($this->once())->method('persist');
-        $em->expects($this->once())->method('flush');
+        $em->expects($this->exactly(2))->method('flush'); // createRun + lineage tracking
 
         $newRun = $this->service->retryRun($originalRun, $user);
 
@@ -1310,6 +1314,8 @@ class TestRunnerServiceTest extends TestCase
         $this->assertSame($suite, $newRun->getSuite());
         $this->assertEquals(TestRun::TRIGGER_MANUAL, $newRun->getTriggeredBy());
         $this->assertSame($user, $newRun->getExecutedBy());
+        $this->assertSame($originalRun, $newRun->getOriginalRun());
+        $this->assertEquals(1, $newRun->getRetryAttempt());
     }
 
     public function testCreateRunWithExecutedBy(): void
@@ -1403,6 +1409,7 @@ class TestRunnerServiceTest extends TestCase
         $this->service = new TestRunnerService(
             $this->entityManager,
             $this->testRunRepository,
+            $this->settingsRepository,
             $this->moduleCloneService,
             $this->mftfExecutor,
             $this->playwrightExecutor,

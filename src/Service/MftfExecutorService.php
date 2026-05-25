@@ -410,6 +410,14 @@ class MftfExecutorService
                     $result->setTestId($testId);
                 }
 
+                // For failed/error tests, extract error details from the matched block
+                if (\in_array($match[3], ['FAIL', 'ERROR'], true)) {
+                    $errorMsg = $this->extractErrorFromBlock($match[0]);
+                    if ($errorMsg) {
+                        $result->setErrorMessage($errorMsg);
+                    }
+                }
+
                 $results[] = $result;
             }
         }
@@ -1074,6 +1082,57 @@ class MftfExecutorService
             'SKIP' => TestResult::STATUS_SKIPPED,
             default => TestResult::STATUS_BROKEN,
         };
+    }
+
+    /**
+     * Extract error details from a matched test block for failed/error tests.
+     */
+    /** Map WebDriver error descriptions to their exception class names. */
+    private const WEBDRIVER_ERROR_MAP = [
+        'element not interactable' => 'ElementNotInteractableException',
+        'element click intercepted' => 'ElementClickInterceptedException',
+        'javascript error:' => 'JavascriptErrorException',
+        'timed out after' => 'TimeoutException',
+        'timed out waiting' => 'TimeoutException',
+        'stale element reference' => 'StaleElementReferenceException',
+    ];
+
+    private function extractErrorFromBlock(string $block): ?string
+    {
+        // Look for WebDriver/Codeception exception class names
+        $pattern = '/(?:Facebook\\\\WebDriver\\\\Exception\\\\\w+Exception|Codeception\\\\.+?Exception|Assert\w*Exception)[:\s].*$/m';
+        if (preg_match($pattern, $block, $match)) {
+            return mb_substr(trim($match[0]), 0, 2000);
+        }
+
+        // Look for common error descriptions and tag with exception class when possible
+        $infraPattern = '/(?:element not interactable|element click intercepted|javascript error:|timed out (?:after|waiting)|stale element reference)[^\n]*/i';
+        if (preg_match($infraPattern, $block, $match)) {
+            $desc = trim($match[0]);
+            $exceptionClass = $this->resolveWebDriverExceptionClass($desc);
+            $prefix = $exceptionClass ? $exceptionClass . ': ' : '';
+
+            return mb_substr($prefix . $desc, 0, 2000);
+        }
+
+        // Assertion failures (never tagged — these are genuine test failures)
+        if (preg_match('/(?:Failed asserting|Expected .+? but got)[^\n]*/i', $block, $match)) {
+            return mb_substr(trim($match[0]), 0, 2000);
+        }
+
+        return null;
+    }
+
+    private function resolveWebDriverExceptionClass(string $description): ?string
+    {
+        $lower = strtolower($description);
+        foreach (self::WEBDRIVER_ERROR_MAP as $needle => $exceptionClass) {
+            if (str_contains($lower, $needle)) {
+                return $exceptionClass;
+            }
+        }
+
+        return null;
     }
 
     private function getPidFilePath(int $runId): string
