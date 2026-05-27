@@ -87,6 +87,16 @@ class SettingsType extends AbstractType
                 'help' => 'Enable to disable frontend URLs (API and admin only)',
             ])
 
+            // Test Execution
+            ->add('autoReportForIndividualRuns', CheckboxType::class, [
+                'label' => 'Auto-generate Allure report for individual test runs',
+                'required' => false,
+                'attr' => [
+                    'class' => 'form-check-input',
+                ],
+                'help' => 'When disabled, Allure reports are only auto-generated for suite runs. Use app:report:generate to create reports manually.',
+            ])
+
             // Security
             ->add('enforce2fa', CheckboxType::class, [
                 'label' => 'Enforce Two-Factor Authentication',

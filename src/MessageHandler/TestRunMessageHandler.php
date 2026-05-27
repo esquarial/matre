@@ -7,6 +7,7 @@ namespace App\MessageHandler;
 use App\Entity\TestRun;
 use App\Entity\User;
 use App\Message\TestRunMessage;
+use App\Repository\SettingsRepository;
 use App\Repository\TestRunRepository;
 use App\Repository\UserRepository;
 use App\Service\NotificationService;
@@ -25,6 +26,7 @@ class TestRunMessageHandler
     public function __construct(
         private readonly TestRunRepository $testRunRepository,
         private readonly UserRepository $userRepository,
+        private readonly SettingsRepository $settingsRepository,
         private readonly TestRunnerService $testRunnerService,
         private readonly NotificationService $notificationService,
         private readonly MessageBusInterface $messageBus,
@@ -169,14 +171,41 @@ class TestRunMessageHandler
     {
         // Generate reports for all runs except cancelled (we need reports to see what failed!)
         if (TestRun::STATUS_CANCELLED !== $run->getStatus()) {
-            try {
-                $this->testRunnerService->generateReports($run);
-            } catch (\Throwable $e) {
-                $this->logger->error('Report generation failed, continuing to NOTIFY', [
-                    'runId' => $run->getId(),
-                    'error' => $e->getMessage(),
-                ]);
-                // Continue to NOTIFY regardless
+            $shouldGenerateReport = true;
+
+            // Skip report for individual (non-suite) runs when setting is disabled
+            if (null === $run->getSuite()) {
+                $settings = $this->settingsRepository->getSettings();
+                if (!$settings->isAutoReportForIndividualRuns()) {
+                    $shouldGenerateReport = false;
+                    $this->logger->info('Skipping report for individual run (disabled in settings)', [
+                        'runId' => $run->getId(),
+                    ]);
+                    // Mark run as completed (preserve failed status if already failed)
+                    try {
+                        if (TestRun::STATUS_FAILED !== $run->getStatus()) {
+                            $run->markCompleted();
+                        }
+                        $this->entityManager->flush();
+                    } catch (\Throwable $e) {
+                        $this->logger->error('Failed to mark skipped-report run as completed, continuing to NOTIFY', [
+                            'runId' => $run->getId(),
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                }
+            }
+
+            if ($shouldGenerateReport) {
+                try {
+                    $this->testRunnerService->generateReports($run);
+                } catch (\Throwable $e) {
+                    $this->logger->error('Report generation failed, continuing to NOTIFY', [
+                        'runId' => $run->getId(),
+                        'error' => $e->getMessage(),
+                    ]);
+                    // Continue to NOTIFY regardless
+                }
             }
         } else {
             $this->logger->info('Skipping report generation for cancelled run', ['id' => $run->getId()]);

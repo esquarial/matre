@@ -54,6 +54,18 @@
             </div>
 
             <div class="form-section">
+                <h3 class="form-section-title">Test Execution</h3>
+
+                <div class="mb-3">
+                    <div class="form-check">
+                        {{ form_widget(form.autoReportForIndividualRuns) }}
+                        {{ form_label(form.autoReportForIndividualRuns) }}
+                    </div>
+                    <div class="form-text text-muted" style="margin-left: 1.5em;">{{ form.autoReportForIndividualRuns.vars.help }}</div>
+                </div>
+            </div>
+
+            <div class="form-section">
                 <h3 class="form-section-title">Security</h3>
 
                 <div class="mb-3">
